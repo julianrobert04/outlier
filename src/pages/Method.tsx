@@ -19,7 +19,7 @@ export default function MethodPage({ data }: { data: Dataset }) {
         </p>
         <p>
           <strong>Recruiting ratings</strong> (247Sports composite, via CollegeFootballData.com):{' '}
-          {data.recruitingLinked ? `${data.recruitingLinked.toLocaleString()} players linked.` : 'not connected yet. When they are, the Outlier Index starts from high school.'}
+          {data.recruitingLinked ? `${data.recruitingLinked.toLocaleString()} players linked by name, school and years, from recruiting classes 2000–${data.model.lastClass}. Classes before about 2003 are thin in the source, so early careers are linked less often.` : 'not connected yet. When they are, the Outlier Index starts from high school.'}
         </p>
       </Block>
 
@@ -73,10 +73,19 @@ export default function MethodPage({ data }: { data: Dataset }) {
 
       <Block t="Outlier Index">
         <p>
-          One number from <strong>.01 to .99</strong>: of everyone who started where this player started, the share whose career turned out
-          worse. It is measured from the <strong>earliest stage available</strong>. When a recruiting rating is linked, the group is every recruit
-          with the same star rating, position and era, <em>including those who never reached the NFL</em>. That is why a 2-star who reaches the Hall of Fame
-          is a .99, and a 5-star who never plays a down falls near .01. Without a recruiting rating, the group is comparable draft picks.
+          One number from <strong>.01 to .99</strong> for the whole journey. It scores each stage we can measure as a percentile:
+        </p>
+        <p>
+          <strong>1. Stars → draft.</strong> Where the player was drafted, against every recruit with the same star rating, position and era,
+          <em>including those who never reached the NFL</em>.<br />
+          <strong>2. Draft → career.</strong> NFL career value against comparable picks, or against other undrafted players.
+        </p>
+        <p>
+          The stages combine as a <strong>weighted geometric mean</strong>, {Math.round(data.model.journeyWeights.draft * 100)}% stars → draft and
+          {' '}{Math.round(data.model.journeyWeights.career * 100)}% draft → career. Multiplying instead of averaging means a collapse can’t be cancelled out by a great
+          climb before it. A 2-star who reaches the Hall of Fame is a .99. A 4-star who goes #1 overall and is out of the league quickly
+          (JaMarcus Russell) climbs to .99, collapses to .01, and lands at .04. Without a linked star rating, the index is stage 2 alone.
+          {' '}{data.recruitingLinked.toLocaleString()} players are linked to a 247Sports Composite rating.
         </p>
       </Block>
 

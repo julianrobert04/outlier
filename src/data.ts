@@ -54,7 +54,7 @@ export type Dataset = {
   recruitingLinked: number
   model: {
     bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; lastClass: number
-    youngFrom: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
+    youngFrom: number; journeyWeights: { draft: number; career: number }; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]
   coverage: { startsFrom: { depthCharts: number[]; snapCounts: number[] }; noStarts: number[]; noTargets: number[]; advancedFrom: number; runStatsFrom: number; college: boolean }

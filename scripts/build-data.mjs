@@ -378,18 +378,28 @@ function archetype(p) {
 }
 
 // ── Outlier Index ──────────────────────────────────────────────────────────
-// One number, .01 to .99: of everyone who started where this player started,
-// the share whose career turned out worse. "Started" is the earliest stage we
-// have: the high-school star rating when recruiting data is linked, otherwise
-// the draft slot (or going undrafted). A 2-star who reaches Canton is a .99;
-// a 5-star who never plays a down sits near .01. Early-career players are
-// only ever compared with their own class.
+// One number, .01 to .99, combining how far a player beat expectation at each
+// stage of the journey we can measure:
+//   1. stars → draft: where they landed in the draft vs every recruit with the
+//      same star rating (position, era), including those who never got drafted;
+//   2. draft → career: NFL career value vs comparable picks (or undrafted peers).
+// Stages combine as a weighted geometric mean, with the NFL career weighted
+// most (JOURNEY_WEIGHTS): a collapse at the end can't be cancelled out by a
+// great climb before it. A 2-star who reaches Canton is .99; a 4-star who goes
+// #1 and busts climbs (.99), collapses (.01) and lands near .04. Without a
+// linked star rating the index is stage 2 alone. Early-career players are only ever
+// compared with their own class.
 
 const RECRUIT_GROUP = {
   PRO: 'QB', DUAL: 'QB', QB: 'QB', RB: 'RB', APB: 'RB', FB: 'RB', WR: 'WR', TE: 'TE',
   OT: 'OL', OG: 'OL', OC: 'OL', IOL: 'OL', OL: 'OL',
   SDE: 'DL', WDE: 'DL', DT: 'DL', DL: 'DL', EDGE: 'DL', DE: 'DL',
   ILB: 'LB', OLB: 'LB', LB: 'LB', CB: 'DB', S: 'DB', DB: 'DB', K: 'ST', P: 'ST', LS: 'ST',
+}
+const JOURNEY_WEIGHTS = { draft: 0.3, career: 0.7 } // stars → draft, draft → career
+const journey = (stage1, stage2) => {
+  const c = x => Math.min(0.99, Math.max(0.01, x))
+  return Math.exp(JOURNEY_WEIGHTS.draft * Math.log(c(stage1)) + JOURNEY_WEIGHTS.career * Math.log(c(stage2)))
 }
 const clampOI = x => Math.min(0.99, Math.max(0.01, Math.round(x * 100) / 100))
 const normName = s => s.toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '')
@@ -420,10 +430,9 @@ async function outlierIndex(players) {
     if (p) { p.recruit = r; r.player = p; linked++ }
   }
 
-  // Outcome for every recruit, drafted or not. Draft slot breaks ties between
-  // careers of equal value, so reaching the NFL, and how high, still counts.
+  // Stage 1 outcome for every recruit: how high they were drafted. Reaching
+  // the league undrafted beats never reaching it.
   const slot = p => (p.pick || UDFA_PICK)
-  const outcome = r => (r.player ? r.player.av + 0.5 - slot(r.player) / 1000 : 0)
   const draftValue = r => (r.player ? 301 - slot(r.player) : 0)
   const lastJudged = YOUNG_FROM - 4 // recruiting classes whose careers are judged in full
   for (const p of players) {
@@ -434,8 +443,8 @@ async function outlierIndex(players) {
     const cohort = recruits.filter(q => q.stars === r.stars && Math.abs(q.year - r.year) <= w &&
       (young || q.year <= lastJudged) && (!r.grp || q.grp === r.grp))
     if (cohort.length < 30) continue
-    p.oi = clampOI(midRank(outcome(r), cohort.map(outcome)))
     p.spct = clampOI(midRank(draftValue(r), cohort.map(draftValue)))
+    p.oi = clampOI(journey(p.spct, p.pct / 100))
     p.from = 'recruit'; p.stars = r.stars; p.rating = Math.round(r.rating * 10000) / 10000
   }
   return linked
@@ -543,7 +552,7 @@ async function main() {
     lastSeason: LAST_SEASON,
     model: {
       bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: FIRST_CLASS, lastClass: LAST_CLASS,
-      youngFrom: YOUNG_FROM, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
+      youngFrom: YOUNG_FROM, journeyWeights: JOURNEY_WEIGHTS, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,

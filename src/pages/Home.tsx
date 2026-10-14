@@ -62,13 +62,13 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
             </div>
             <div className="prose">
               <p>
-                One number from <strong>.01</strong> to <strong>.99</strong>. Of every player who started where this one
-                started, what share had a <strong>worse</strong> career? Start at the bottom and finish at the top,
-                and the number rises toward .99. Arrive as a sure thing and disappear, and it falls toward .01.
+                One number from <strong>.01</strong> to <strong>.99</strong> for the whole road: high-school stars, the draft, the NFL career.
+                Each stage is scored against everyone who started in the same place. Start at the bottom and finish at the top, and the
+                number rises toward .99. Arrive as a sure thing and disappear, and it falls toward .01. How a career ends weighs most.
               </p>
               <p>
                 {data.recruitingLinked
-                  ? <>The starting point is the high-school star rating when we have it, and the draft slot otherwise.</>
+                  ? <>{data.recruitingLinked.toLocaleString()} players are linked to their 247Sports Composite rating. For the rest, the index starts at the draft.</>
                   : <>Right now the starting point is the draft slot. Once high-school star ratings are connected, the index starts from the recruiting rating, covering the whole road from high school to the NFL.</>}
               </p>
             </div>

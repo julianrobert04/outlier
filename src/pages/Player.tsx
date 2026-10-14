@@ -65,12 +65,16 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
           </div>
           <div className="oi-rank">
             <strong style={{ color: 'var(--ink)' }}>Outlier Index{p.young ? ', early read' : ''}</strong>
-            {isExtreme(p) && <> · {rankLabel(p)} comparable players</>}
+            {isExtreme(p) && <> · career {rankLabel(p).toLowerCase().replace('no.', 'No.')} comparable players</>}
+          </div>
+          <div className="meta" style={{ marginTop: 6 }}>
+            {p.from === 'recruit' && p.spct != null
+              ? <>{p.stars}★ → draft {oiLabel(p.spct)} · draft → {p.young ? 'so far' : 'career'} {oiLabel(Math.min(0.99, Math.max(0.01, p.pct / 100)))}</>
+              : <>draft → {p.young ? 'so far' : 'career'} {oiLabel(Math.min(0.99, Math.max(0.01, p.pct / 100)))} · no star rating linked</>}
           </div>
           <p className="muted" style={{ marginTop: 20, maxWidth: '34ch' }}>{verdict(p)}</p>
           <div className="mono faint" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
-            measured from: {p.from === 'recruit' ? `${p.stars}-star recruit` : p.from === 'udfa' ? 'going undrafted' : 'draft slot'}
-            {p.young ? <><br />after {yrs.toFixed(1)} seasons · compared on pace with other 2022+ players</> : null}
+            {p.young ? <>after {yrs.toFixed(1)} seasons · compared on pace with other 2022+ players</> : null}
             {lowConfidence(p, data) && <><br /><span className="under">thin comparison group ({p.peers} peers)</span></>}
           </div>
         </div>
