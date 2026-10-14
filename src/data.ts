@@ -37,6 +37,9 @@ export type Player = {
   ladder: number // grade from the ladder alone
   q: number // career quality: career value percentile within position
   qgrade: number // career quality on the steep scale (quality^6)
+  ap2: number // second-team All-Pro selections
+  awards: string // "mvp:2007;dpoy:2008" — major awards with seasons
+  honorPoints: number // career-value points added for honors, on a scale of prestige
   rank: number // place among core comparable players (1 = best)
   of: number
   from: 'recruit' | 'draft' | 'udfa' // the stage the index is measured from
@@ -68,6 +71,8 @@ export type Dataset = {
   seasonCols: string[]
   collegeCols: string[]
   collegeLinked: number
+  honorPoints: Record<string, number>
+  awardLabels: Record<string, string>
   coverage: { startsFrom: { depthCharts: number[]; snapCounts: number[] }; noStarts: number[]; noTargets: number[]; advancedFrom: number; runStatsFrom: number; college: { offenseFrom: number; defenseFrom: number } }
   players: Player[]
   byId: Map<string, Player>
@@ -99,6 +104,26 @@ export const ordinal = (n: number) => {
 
 // "×12", "×3.5", "×0.08": how many times the usual outcome.
 export const times = (x: number) => `×${x >= 10 ? Math.round(x) : x >= 1 ? x.toFixed(1) : x >= 0.1 ? x.toFixed(2) : x.toFixed(3)}`
+
+// Honors in order of prestige: "3× MVP (2007, 2010, 2017)", "8× Pro Bowl"…
+const AWARD_ORDER = ['mvp', 'opoy', 'dpoy', 'sbmvp', 'oroy', 'droy', 'comeback']
+export function honorsList(p: Player, d: Dataset): string[] {
+  const out: string[] = []
+  if (p.hof) out.push('Hall of Fame')
+  const byKey = new Map<string, number[]>()
+  for (const a of (p.awards || '').split(';').filter(Boolean)) {
+    const [k, y] = a.split(':')
+    byKey.set(k, [...(byKey.get(k) ?? []), Number(y)])
+  }
+  for (const k of AWARD_ORDER) {
+    const ys = byKey.get(k)
+    if (ys) out.push(`${ys.length > 1 ? `${ys.length}× ` : ''}${d.awardLabels[k]} (${ys.join(', ')})`)
+  }
+  if (p.ap) out.push(`${p.ap}× First-team All-Pro`)
+  if (p.ap2) out.push(`${p.ap2}× Second-team All-Pro`)
+  if (p.pb) out.push(`${p.pb}× Pro Bowl`)
+  return out
+}
 
 // What a grade means, in words.
 export const GRADE_BANDS: [number, string][] = [

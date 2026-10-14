@@ -414,11 +414,12 @@ const QUALITY_POWER = 6
 const ACTIVE_CAP = 0.97
 function careerQuality(players) {
   const pools = new Map()
-  for (const p of players) if (!p.young && p.games > 0) pools.set(p.grp, [...(pools.get(p.grp) ?? []), p.av])
+  const score = p => Math.max(p.av, 0) + (p.honorPoints ?? 0)
+  for (const p of players) if (!p.young && p.games > 0) pools.set(p.grp, [...(pools.get(p.grp) ?? []), score(p)])
   for (const v of pools.values()) v.sort((a, b) => a - b)
   for (const p of players) {
     const pool = pools.get(p.grp)
-    p.q = pool && p.games > 0 ? midRankSorted(pool, p.av) : 0
+    p.q = pool && p.games > 0 ? midRankSorted(pool, score(p)) : 0
   }
 }
 function midRankSorted(sorted, x) {
@@ -566,6 +567,84 @@ async function outlierIndex(players) {
     p.sExpected = Math.round(e.mean * 10) / 10
   }
   return linked
+}
+
+// ── Honors ─────────────────────────────────────────────────────────────────
+// Pro Bowls, All-Pro teams and the major awards, from Wikipedia (scripts/
+// fetch-honors.mjs). Drafted players keep Pro Football Reference's Pro Bowl
+// and first-team All-Pro counts; everything else (and undrafted players'
+// counts) comes from the season pages. Each honor adds career-value points on
+// a scale of prestige: All-Pro weighs far more than a Pro Bowl.
+const HONOR_POINTS = { mvp: 30, opoy: 20, dpoy: 20, sbmvp: 12, ap1: 10, oroy: 6, droy: 6, ap2: 4, comeback: 3, pb: 2, hof: 25 }
+const AWARD_LABEL = { mvp: 'MVP', opoy: 'Offensive Player of the Year', dpoy: 'Defensive Player of the Year', sbmvp: 'Super Bowl MVP',
+  oroy: 'Offensive Rookie of the Year', droy: 'Defensive Rookie of the Year', comeback: 'Comeback Player of the Year' }
+
+const wikiName = s => normName(s.replace(/\(.*?\)/g, ''))
+function rowNames(row) {
+  const names = []
+  for (const m of row.matchAll(/\{\{sortname\|([^|}]*)\|([^|}]*)(?:\|([^|}]*))?/g)) names.push(m[3]?.trim() || `${m[1]} ${m[2]}`)
+  for (const m of row.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/g)) names.push(m[1])
+  return names
+}
+
+async function linkHonors(players) {
+  const dir = `${RAW}/honors`
+  if (!existsSync(`${dir}/awards.json`)) return 0
+  const byName = new Map()
+  for (const p of players) byName.set(normName(p.name), [...(byName.get(normName(p.name)) ?? []), p])
+  // The player with this name active in that season; on a collision, the most accomplished one.
+  const who = (raw, season) => {
+    const c = (byName.get(wikiName(raw)) ?? []).filter(p => p.games > 0 && season >= p.year && season <= (p.to || p.year))
+    return c.sort((a, b) => b.av - a.av)[0] ?? null
+  }
+  for (const p of players) { p.honorsList = []; p.ap2 = 0; if (!p.pick) { p.pb = 0; p.ap = 0 } }
+  const give = (p, key, season) => {
+    if (p.honorsList.some(h => h[0] === key && h[1] === season)) return
+    p.honorsList.push([key, season])
+  }
+  let found = 0
+  // Season pages: Pro Bowl rosters and All-Pro teams.
+  for (let y = FIRST_CLASS; y <= LAST_SEASON; y++) {
+    if (!existsSync(`${dir}/${y}.json`)) continue
+    const { proBowl, allPro } = JSON.parse(await readFile(`${dir}/${y}.json`, 'utf8'))
+    const pbNames = new Set([...proBowl.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/g)].map(m => m[1]))
+    for (const n of pbNames) { const p = who(n, y); if (p) { give(p, 'pb', y); found++ } }
+    for (const m of allPro.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\][^\[\n(]*?(?:\[\[[^\]]*\]\])?[^\[\n(]*?\(([^)]*)\)/g)) {
+      const tags = m[2].split(/[,;\s]+/).map(t => t.trim())
+      const p = who(m[1], y)
+      if (!p) continue
+      if (tags.includes('AP')) give(p, 'ap1', y)
+      else if (tags.includes('AP-2')) give(p, 'ap2', y)
+    }
+  }
+  // Award pages: one row per season.
+  const awards = JSON.parse(await readFile(`${dir}/awards.json`, 'utf8'))
+  const sections = {
+    mvp: awards.mvp, opoy: awards.opoy, dpoy: awards.dpoy, sbmvp: awards.sbmvp, comeback: awards.comeback,
+    oroy: (awards.oroy ?? '').split(/^=+\s*Defensive/m)[0],
+    droy: (awards.droy ?? '').split(/^=+\s*Defensive/m)[1] ?? '',
+  }
+  for (const [key, text] of Object.entries(sections)) {
+    for (const row of (text ?? '').split(/\n\|-/).slice(1)) {
+      // A real table row opens with its season; prose and infoboxes don't.
+      const first = row.split('\n').find(l => l.trim()) ?? ''
+      const ym = first.match(/\[\[(\d{4}) NFL season/)
+      if (!ym) continue
+      const season = Number(ym[1])
+      if (season < FIRST_CLASS || season > LAST_SEASON) continue
+      for (const n of rowNames(row)) { const p = who(n, season); if (p) { give(p, key, season); break } }
+    }
+  }
+  // Counts: drafted players keep PFR's Pro Bowl / first-team All-Pro counts.
+  for (const p of players) {
+    const count = k => p.honorsList.filter(h => h[0] === k).length
+    if (!p.pick) { p.pb = count('pb'); p.ap = count('ap1'); p.honors = 1 }
+    p.ap2 = count('ap2')
+    p.awards = p.honorsList.filter(h => AWARD_LABEL[h[0]]).sort((a, b) => a[1] - b[1]).map(h => `${h[0]}:${h[1]}`).join(';')
+    p.honorPoints = HONOR_POINTS.pb * p.pb + HONOR_POINTS.ap1 * p.ap + HONOR_POINTS.ap2 * p.ap2 + (p.hof ? HONOR_POINTS.hof : 0) +
+      p.honorsList.filter(h => AWARD_LABEL[h[0]]).reduce((s, h) => s + HONOR_POINTS[h[0]], 0)
+  }
+  return found
 }
 
 // ── College stats ──────────────────────────────────────────────────────────
@@ -719,6 +798,7 @@ async function main() {
     for (const g of byGroup.keys()) cls.filter(p => p.grp === g).forEach((p, i) => { p.posRank = i + 1 })
   }
   const recruited = await outlierIndex(players)
+  const honored = await linkHonors(players)
   careerQuality(players)
   for (const p of players) p.oi = finalGrade(p)
   const collegeLinked = await linkCollege(players)
@@ -743,7 +823,7 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'oi', 'm1', 'm2', 'mult', 'ladder', 'q', 'qgrade', 'rank', 'of', 'from', 'stars', 'rating', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+    'oi', 'm1', 'm2', 'mult', 'ladder', 'q', 'qgrade', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
   // Recruiting fields stay null when there is no link: null means "unknown", never 0.
   const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' || f === 'qgrade' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
@@ -760,6 +840,8 @@ async function main() {
     seasonCols: SEASON_COLS,
     collegeCols: COLLEGE_COLS,
     collegeLinked,
+    honorPoints: HONOR_POINTS,
+    awardLabels: AWARD_LABEL,
     coverage: {
       startsFrom: { depthCharts: range(2001, 2024).filter(y => !snapSeasons.has(y)), snapCounts: [...snapSeasons].sort() },
       noStarts: [2000],
@@ -772,7 +854,7 @@ async function main() {
     fields, rows,
   }))
   const und = players.filter(p => !p.pick).length
-  console.log(`${players.length} players (${und} undrafted, ${recruited} linked to recruiting, ${collegeLinked} to college stats) → ${OUT}`)
+  console.log(`${players.length} players (${und} undrafted, ${recruited} linked to recruiting, ${collegeLinked} to college stats, ${honored} Pro Bowl spots matched) → ${OUT}`)
   console.log('AV model R²:', Object.entries(models).map(([g, m]) => `${g} ${m.r2}`).join(' · '))
 }
 

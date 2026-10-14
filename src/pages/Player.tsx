@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  accolades, ALL_ARCHETYPES, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
+  accolades, ALL_ARCHETYPES, honorsList, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
   shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season,
 } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
@@ -28,7 +28,8 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
   const arche = ALL_ARCHETYPES.find(a => a.name === p.dna)
   const span = p.seasons ? `${p.year}–${p.active ? 'now' : p.to}` : 'never played a regular-season game'
   const yrs = yearsIn(p, data)
-  const badges = p.young ? accolades(p) : []
+  const badges = p.young ? accolades(p).filter(b => !/Pro Bowl|All-Pro/.test(b)) : []
+  const honors = honorsList(p, data)
   const comparedTo = p.young
     ? `young ${GROUP_NAME[p.grp].toLowerCase()}${p.pick ? ` drafted near ${shortPick(p)}` : ' who went undrafted'}, 2022–${data.model.lastClass}`
     : p.pick ? `${GROUP_NAME[p.grp].toLowerCase()} drafted near #${p.pick} in nearby classes`
@@ -51,6 +52,9 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         {p.active && !p.young ? <span>active, career still in progress</span> : null}
       </div>
 
+      {honors.length > 0 && (
+        <p className="honors" aria-label="Honors">{honors.join(' · ')}</p>
+      )}
       {badges.length > 0 && (
         <div className="badges">
           {badges.map(b => <span key={b}>{b}</span>)}
@@ -127,7 +131,7 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         </ol>
         <p className="mono faint" style={{ fontSize: 12, marginTop: 20 }}>
           {p.line} · {p.games} games
-          {!p.honors && ' · Pro Bowl and All-Pro honors aren’t in the source data for undrafted players yet'}
+
         </p>
       </section>
 

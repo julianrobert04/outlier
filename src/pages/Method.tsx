@@ -99,7 +99,11 @@ export default function MethodPage({ data }: { data: Dataset }) {
         </p>
         <p>
           <strong>3. How good the career was.</strong> The numbers count, not only expectations. Total career value (Pro Football Reference’s AV,
-          built from the player’s stats) is ranked against everyone at the position who played since {data.model.firstClass}, and put on a steep scale
+          built from the player’s stats) plus <strong>honor points on a scale of prestige</strong>: MVP {data.honorPoints.mvp}, Offensive or Defensive Player of the Year
+          {' '}{data.honorPoints.opoy}, Hall of Fame {data.honorPoints.hof}, Super Bowl MVP {data.honorPoints.sbmvp}, first-team All-Pro {data.honorPoints.ap1}, Rookie of the Year {data.honorPoints.oroy},
+          second-team All-Pro {data.honorPoints.ap2}, Comeback Player {data.honorPoints.comeback}, Pro Bowl {data.honorPoints.pb} (a popularity vote, so it counts least).
+          Awards, All-Pro teams and undrafted players’ Pro Bowls come from Wikipedia’s season pages; drafted players’ Pro Bowl and All-Pro counts from
+          Pro Football Reference. The total is ranked against everyone at the position who played since {data.model.firstClass}, and put on a steep scale
           (quality<sup>{data.model.qualityPower}</sup>): better than 90% of the position is .53, 99% is .94.
         </p>
         <p>

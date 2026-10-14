@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "data": "node scripts/build-pbp.mjs && node scripts/build-data.mjs",
+    "data": "node scripts/fetch-honors.mjs && node scripts/build-pbp.mjs && node scripts/build-data.mjs",
     "data:cfbd": "node scripts/fetch-recruits.mjs && node scripts/fetch-college.mjs && node scripts/build-data.mjs --offline"
   },
   "dependencies": {

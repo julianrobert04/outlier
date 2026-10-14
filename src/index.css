@@ -336,3 +336,4 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .scale th, .scale td { padding: 6px 8px 6px 0; font-size: 12px; }
 .explainer, .examples, .example { min-width: 0; }
 .rule-box { min-width: 0; }
+.honors { margin-top: 16px; font-size: 14px; max-width: 70ch; line-height: 1.6; }

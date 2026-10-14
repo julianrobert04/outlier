@@ -50,7 +50,7 @@ export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
         <span className="stage-value num">{p.games ? qLabel(p.qgrade) : '—'}</span>
         <span className="stage-text">
           {p.games
-            ? <>Total career value better than {Math.min(99.9, Math.round(p.q * 1000) / 10)}% of {GROUP_NAME[p.grp].toLowerCase()} who played since {data.model.firstClass}{p.active ? ', and still counting' : ''}. {qualityNote(p, data)}</>
+            ? <>{p.av} career value{p.honorPoints ? ` + ${p.honorPoints} honor points` : ''}: better than {Math.min(99.9, Math.round(p.q * 1000) / 10)}% of {GROUP_NAME[p.grp].toLowerCase()} who played since {data.model.firstClass}{p.active ? ', and still counting' : ''}. {qualityNote(p, data)}</>
             : 'Never played a regular-season game.'}
         </span>
       </li>
@@ -118,7 +118,7 @@ export function FormulaExplainer({ data, ids }: { data: Dataset; ids: string[] }
           <li><strong>Step 1, getting drafted.</strong> How many times more (or less) draft value the player got than recruits with his stars usually get. A 2★ in round 2 is a big jump. A 5★ in round 1 is what was expected.</li>
           <li><strong>Step 2, the NFL career.</strong> How many times more (or less) career value than his draft slot usually produces.</li>
           <li><strong>Steps multiply.</strong> The draft counts half (square root), the career counts fully, and a falling career counts double.</li>
-          <li><strong>Step 3, how good the career was.</strong> The numbers count, not only the expectations. Total career value (built from his stats) is ranked against everyone at the position, on a steep scale: better than 75% → .18, 90% → .53, 95% → .74, 99% → .94.</li>
+          <li><strong>Step 3, how good the career was.</strong> The numbers count, not only the expectations. Career value (built from his stats) plus honor points on a scale of prestige: MVP {data.honorPoints.mvp}, Player of the Year {data.honorPoints.opoy}, Super Bowl MVP {data.honorPoints.sbmvp}, first-team All-Pro {data.honorPoints.ap1}, Rookie of the Year {data.honorPoints.oroy}, second-team All-Pro {data.honorPoints.ap2}, Pro Bowl {data.honorPoints.pb}, Hall of Fame {data.honorPoints.hof}. Ranked against everyone at the position, on a steep scale: better than 90% → .53, 95% → .74, 99% → .94.</li>
           <li><strong>The grade is half climb, half career:</strong> √(ladder × career quality). A big climb with modest numbers lands in the middle. The top {Math.round((1 - data.model.eliteFrom) * 100)}% of a position grades high even when it was expected, and .99 is the top {Math.round((1 - data.model.eliteTop) * 1000) / 10}%: {data.players.filter(p => p.oi >= 0.99).length} careers since {data.model.firstClass}.</li>
           <li><strong>Careers in progress</strong> can still go down, so they’re capped at {oiLabel(data.model.activeCap)} until they end ({oiLabel(data.model.earlyCap)} for the {data.model.youngFrom}+ classes). Grades round down.</li>
         </ul>
