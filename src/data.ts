@@ -57,6 +57,7 @@ export type Dataset = {
     youngFrom: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]
+  coverage: { startsFrom: { depthCharts: number[]; snapCounts: number[] }; noStarts: number[]; noTargets: number[]; college: boolean }
   players: Player[]
   byId: Map<string, Player>
 }

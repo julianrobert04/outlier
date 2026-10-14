@@ -7,8 +7,9 @@
 //   draft_picks   — every pick, with Pro Football Reference career value (AV) and honors
 //   players       — the player registry, including undrafted players
 //   stats_player  — regular-season stats per player per season
-//   depth_charts  — weekly starters, 2001–2011
-//   snap_counts   — snaps per game, 2012 onward
+//   depth_charts  — weekly starters, 2001–2024 (used where snap counts are missing)
+//   snap_counts   — snaps per game, 2013 onward (the published 2012 file is empty)
+//   nfldata games — the schedule, so depth-chart bye weeks don't count as starts
 //
 // Every number on the site is derived here. Nothing is hand-entered.
 
@@ -65,13 +66,18 @@ function sources() {
     ['draft_picks/draft_picks.csv', 'draft_picks.csv'],
     ['players/players.csv', 'players.csv'],
     ...range(FIRST_CLASS, LAST_SEASON).map(y => [`stats_player/stats_player_reg_${y}.csv`, `stats/${y}.csv`]),
-    ...range(2001, 2011).map(y => [`depth_charts/depth_charts_${y}.csv`, `depth/${y}.csv`]),
+    ...range(2001, 2024).map(y => [`depth_charts/depth_charts_${y}.csv`, `depth/${y}.csv`]),
     ...range(2012, LAST_SEASON).map(y => [`snap_counts/snap_counts_${y}.csv`, `snaps/${y}.csv`]),
   ]
 }
 
+const SCHEDULE_URL = 'https://github.com/nflverse/nfldata/raw/master/data/games.csv'
+
 async function download() {
   for (const d of ['stats', 'depth', 'snaps']) await mkdir(`${RAW}/${d}`, { recursive: true })
+  const sched = await fetch(SCHEDULE_URL)
+  if (!sched.ok) throw new Error(`schedule: HTTP ${sched.status}`)
+  await writeFile(`${RAW}/games.csv`, await sched.text())
   const queue = sources()
   await Promise.all(range(1, 8).map(async () => {
     for (let s; (s = queue.shift());) {
@@ -117,17 +123,26 @@ async function buildSeasons(pfrToGsis) {
       for (const [k, col] of Object.entries(STAT_MAP)) s[k] += num(r[col])
     }
   }
-  // Starters, 2001–2011: first string on the weekly offensive/defensive depth chart.
-  for (const y of range(2001, 2011)) {
+  // Starters from depth charts: first string on the weekly offensive/defensive
+  // chart. Used for any season that has no snap counts. Charts are published
+  // for bye weeks too, so only weeks the team actually played count.
+  const played = new Set((await load('games.csv'))
+    .filter(g => g.game_type === 'REG')
+    .flatMap(g => [`${g.season}|${g.week}|${g.home_team}`, `${g.season}|${g.week}|${g.away_team}`]))
+  for (const y of range(2001, 2024)) {
     for (const r of await load(`depth/${y}.csv`)) {
       if (r.game_type !== 'REG' || r.depth_team !== '1' || !r.gsis_id) continue
+      if (!played.has(`${y}|${Number(r.week)}|${r.club_code}`)) continue
       if (r.formation !== 'Offense' && r.formation !== 'Defense') continue
       row(r.gsis_id, y).depthGS.add(r.week)
     }
   }
-  // Games and starts, 2012+: any snap = a game played; ≥50% of snaps = a start.
+  // Games and starts from snap counts: any snap = a game played; ≥50% of
+  // snaps = a start. Only seasons whose file actually has rows count.
+  const snapSeasons = new Set()
   for (const y of range(2012, LAST_SEASON)) {
     for (const r of await load(`snaps/${y}.csv`)) {
+      snapSeasons.add(y)
       if (r.game_type !== 'REG') continue
       const id = pfrToGsis.get(r.pfr_player_id)
       if (!id) continue
@@ -139,11 +154,12 @@ async function buildSeasons(pfrToGsis) {
   }
   for (const m of seasons.values()) {
     for (const s of m.values()) {
-      s.g = Math.max(s.g, s.snapG)
-      s.gs = s.season >= 2012 ? s.snapGS : Math.min(s.depthGS.size, s.g || s.depthGS.size)
+      s.gs = snapSeasons.has(s.season) ? s.snapGS : Math.min(s.depthGS.size, 17)
+      // A start is a game played; box-score games miss linemen without stats.
+      s.g = Math.max(s.g, s.snapG, s.gs)
     }
   }
-  return seasons
+  return { seasons, snapSeasons }
 }
 
 function careerTotals(rows) {
@@ -388,7 +404,7 @@ async function main() {
   const picks = await load('draft_picks.csv')
   const registry = await load('players.csv')
   const pfrToGsis = new Map(registry.filter(r => r.pfr_id && r.gsis_id).map(r => [r.pfr_id, r.gsis_id]))
-  const seasons = await buildSeasons(pfrToGsis)
+  const { seasons, snapSeasons } = await buildSeasons(pfrToGsis)
   const seasonRows = id => [...(seasons.get(id)?.values() ?? [])].filter(s => s.g > 0 || s.gs > 0).sort((a, b) => a.season - b.season)
 
   // Drafted players: PFR's real AV and honors.
@@ -487,6 +503,12 @@ async function main() {
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,
+    coverage: {
+      startsFrom: { depthCharts: range(2001, 2024).filter(y => !snapSeasons.has(y)), snapCounts: [...snapSeasons].sort() },
+      noStarts: [2000],
+      noTargets: range(2003, 2008),
+      college: false,
+    },
     recruitingLinked: recruited,
     fields, rows,
   }))

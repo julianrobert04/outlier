@@ -120,10 +120,13 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
       <section className="section">
         <h2 className="h3" style={{ marginBottom: 24 }}>Season by season <span className="muted" style={{ fontWeight: 400 }}>· NFL regular season</span></h2>
         {seasons === null ? <p className="faint mono" style={{ fontSize: 12 }}>loading…</p>
-          : seasons.length ? <SeasonTable grp={p.grp} rows={seasons} />
+          : seasons.length ? <SeasonTable grp={p.grp} rows={seasons} data={data} />
             : <p className="faint">No regular-season games on record.</p>}
         <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>
-          GS = games started: first string on the depth chart (2001–11) or ≥50% of snaps (2012+). Stats from nflverse.
+          GS = games started: first string on the weekly depth chart ({data.coverage.startsFrom.depthCharts[0]}–{data.coverage.startsFrom.depthCharts[data.coverage.startsFrom.depthCharts.length - 1]})
+          or at least 50% of snaps ({data.coverage.startsFrom.snapCounts[0]}+). Before {data.coverage.startsFrom.snapCounts[0]}, games for players without
+          box-score stats (mostly linemen) count only games they started. — means the source didn’t track it that season.
+          {data.lastSeason} is in progress. Stats from nflverse.
         </p>
       </section>
 
@@ -226,7 +229,9 @@ function teamCount(rows: Season[]) {
   return `${n} team${n === 1 ? '' : 's'}`
 }
 
-function SeasonTable({ grp, rows }: { grp: Group; rows: Season[] }) {
+function SeasonTable({ grp, rows, data }: { grp: Group; rows: Season[]; data: Dataset }) {
+  const untracked = (k: string, season: number) =>
+    (k === 'tgt' && data.coverage.noTargets.includes(season)) || (k === 'gs' && data.coverage.noStarts.includes(season))
   const cols = COLS[grp]
   const total = (k: string) => rows.reduce((s, r) => s + Number(r[k] || 0), 0)
   const f = (v: number) => (Number.isInteger(v) ? v.toLocaleString('en-US') : v.toFixed(1))
@@ -237,9 +242,9 @@ function SeasonTable({ grp, rows }: { grp: Group; rows: Season[] }) {
         <tbody>
           {rows.map(r => (
             <tr key={String(r.season)}>
-              <td className="num">{r.season}</td>
+              <td className="num">{r.season}{Number(r.season) === data.lastSeason ? <span className="faint">*</span> : null}</td>
               <td className="mono">{r.team}</td>
-              {cols.map(([k]) => <td key={k} className="r num">{k === 'tgt' && Number(r.season) < 2006 ? '—' : f(Number(r[k] || 0))}</td>)}
+              {cols.map(([k]) => <td key={k} className="r num">{untracked(k, Number(r.season)) ? '—' : f(Number(r[k] || 0))}</td>)}
             </tr>
           ))}
           <tr className="total">
