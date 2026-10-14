@@ -120,19 +120,29 @@ export default function Scatter({ players, height = 460, labels = [], focus, ton
       halo(g, 'what the slot predicts', x(last[0]) + 6, y(last[1]) - 12, col('--paper'), col('--ink'))
     }
 
-    // labels
+    // labels: try right, then left; skip a label that would collide
+    const placed: [number, number, number, number][] = []
     const drawLabel = (p: Player, strong: boolean) => {
       const d = pts.find(q => q.p === p)
       if (!d) return
+      g.font = `${strong ? 700 : 600} 12px Archivo, sans-serif`
+      const tw = g.measureText(p.name).width
+      const sides = d.x > w - 140 ? [-1, 1] : [1, -1]
+      const side = sides.find(sd => {
+        const x0 = sd > 0 ? d.x + 10 : d.x - 10 - tw
+        return x0 >= 0 && x0 + tw <= w && !placed.some(([a, b, c, e]) => x0 < c && x0 + tw > a && d.y - 8 < e && d.y + 8 > b)
+      })
+      if (side === undefined && !strong) return
+      const sd = side ?? 1
+      const x0 = sd > 0 ? d.x + 10 : d.x - 10 - tw
+      placed.push([x0, d.y - 8, x0 + tw, d.y + 8])
       g.strokeStyle = col('--ink'); g.lineWidth = 1.5
       g.beginPath(); g.arc(d.x, d.y, strong ? 6 : 4.5, 0, Math.PI * 2); g.stroke()
-      g.font = `${strong ? 700 : 600} 12px Archivo, sans-serif`
-      const right = d.x > w - 140
-      g.textAlign = right ? 'right' : 'left'
-      halo(g, p.name, d.x + (right ? -10 : 10), d.y + 4, col('--paper'), col('--ink'))
+      g.textAlign = 'left'
+      halo(g, p.name, x0, d.y + 4, col('--paper'), col('--ink'))
     }
-    labels.forEach(p => drawLabel(p, false))
     if (focus) drawLabel(focus, true)
+    labels.forEach(p => drawLabel(p, false))
     if (hover) {
       const d = pts.find(q => q.p === hover)
       if (d) { g.strokeStyle = col('--ink'); g.lineWidth = 2; g.beginPath(); g.arc(d.x, d.y, 6, 0, Math.PI * 2); g.stroke() }
