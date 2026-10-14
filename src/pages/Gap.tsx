@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { era, gap, GROUPS, type Dataset, type Group, type Player } from '../data'
-import { Chips, GapBar, GapNum, OI, playerHref } from '../ui'
+import { Chips, GapBar, GapNum, OI, playerHref, useQueryState } from '../ui'
 
 const BOARDS = {
   over: { label: 'Beat the slot', note: 'Most career value above what the draft slot predicted.', filter: (p: Player) => !p.young && p.pick > 0, dir: -1 },
@@ -13,28 +13,26 @@ const BOARDS = {
 type Board = keyof typeof BOARDS
 
 export default function GapPage({ data }: { data: Dataset }) {
-  const [board, setBoard] = useState<Board>(() => {
-    const b = new URLSearchParams(location.hash.split('?')[1]).get('board')
-    return b && b in BOARDS ? (b as Board) : 'over'
-  })
-  const [grp, setGrp] = useState<Group | 'ALL'>('ALL')
-  const [dec, setDec] = useState('ALL')
-  const [done, setDone] = useState(true)
-  const [n, setN] = useState(50)
+  const [rawBoard, setBoard] = useQueryState<Board>('board', 'over')
+  const board: Board = rawBoard in BOARDS ? rawBoard : 'over'
+  const [grp, setGrp] = useQueryState<Group | 'ALL'>('grp', 'ALL')
+  const [dec, setDec] = useQueryState<string>('era', 'ALL')
+  const [doneN, setDone] = useQueryState<number>('done', 1)
+  const [n, setN] = useQueryState<number>('n', 50)
+  const done = doneN === 1
 
   const decades = useMemo(() => [...new Set(data.players.filter(p => !p.young).map(p => era(p.year)))], [data])
   const list = useMemo(() => {
     const b = BOARDS[board]
     return data.players
       .filter(p => b.filter(p) && (grp === 'ALL' || p.grp === grp) && (board === 'rising' || dec === 'ALL' || era(p.year) === dec) && (board === 'rising' || !done || !p.active))
-      .sort((a, c) => (b.dir ? b.dir * (gap(a) - gap(c)) : c.oi - a.oi || c.av - a.av))
+      .sort((a, c) => (b.dir ? b.dir * (gap(a) - gap(c)) : c.oi - a.oi || a.rank / a.of - c.rank / c.of || c.av - a.av))
   }, [data, board, grp, dec, done])
   const max = Math.max(...list.slice(0, n).map(p => Math.abs(gap(p))), 1)
 
   return (
     <div className="wrap" style={{ paddingTop: 56 }}>
-      <div className="kicker"><b>01</b> Expectation Gap</div>
-      <h1 className="h1" style={{ marginTop: 16 }}>Who became more<br />than expected?</h1>
+      <h1 className="h1">Who became more<br />than expected?</h1>
       <p className="lede" style={{ marginTop: 20 }}>
         Every pick comes with a prediction: what players taken at that slot, at that position, in that era usually become.
         The gap is the distance between that prediction and the career that followed.
@@ -47,7 +45,7 @@ export default function GapPage({ data }: { data: Dataset }) {
           <Chips value={grp} onChange={setGrp} label="Position" options={['ALL', ...GROUPS] as (Group | 'ALL')[]} />
           {board !== 'rising' && <>
             <Chips value={dec} onChange={setDec} label="Draft era" options={['ALL', ...decades]} />
-            <Chips value={done ? 1 : 0} onChange={v => setDone(!!v)} label="Careers" options={[[1, 'Completed'], [0, 'Include active']]} />
+            <Chips value={doneN} onChange={setDone} label="Careers" options={[[1, 'Completed'], [0, 'Include active']]} />
           </>}
         </div>
         <p className="muted" style={{ marginBottom: 16, fontSize: 13 }}>{BOARDS[board].note} {list.length.toLocaleString()} players.</p>
@@ -57,14 +55,14 @@ export default function GapPage({ data }: { data: Dataset }) {
             <tr>
               <th>#</th><th>Player</th><th className="hide-s">Drafted</th>
               <th className="r hide-s">Expected</th><th className="r hide-s">Actual</th>
-              <th className="hide-s" style={{ width: '22%' }}>Gap</th><th className="r">AV</th><th className="r">OI</th>
+              <th className="hide-s" style={{ width: '22%' }}>Vs. expectation</th><th className="r">Gap</th><th className="r">OI</th>
             </tr>
           </thead>
           <tbody>
             {list.slice(0, n).map((p, i) => (
               <tr key={p.id} className="link" onClick={() => (location.hash = playerHref(p).slice(1))}>
                 <td className="rank">{i + 1}</td>
-                <td><div className="name">{p.name}</div><div className="sub mono">{p.pos} · {p.college}</div></td>
+                <td><div className="name"><a href={playerHref(p)} onClick={e => e.stopPropagation()}>{p.name}</a></div><div className="sub mono">{p.pos} · {p.college}</div></td>
                 <td className="mono hide-s">{p.year} · {p.pick ? `Rd ${p.round} #${p.pick}` : 'UDFA'}</td>
                 <td className="r num hide-s faint">{p.exp.toFixed(1)}</td>
                 <td className="r num hide-s">{p.av}{p.est ? '*' : ''}</td>

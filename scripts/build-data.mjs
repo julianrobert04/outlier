@@ -259,7 +259,7 @@ function expectation(p, group) {
   let out
   for (const bw of drafted ? BANDWIDTHS : [Infinity]) {
     for (const w of windows) {
-      let sw = 0, sw2 = 0, swa = 0, below = 0
+      let sw = 0, sw2 = 0, swa = 0, below = 0, core = 0, above = 0
       for (const q of group) {
         if (q === p || (q.pick > 0) !== drafted || p.young !== q.young || Math.abs(q.year - p.year) > w) continue
         let k = 1
@@ -269,6 +269,8 @@ function expectation(p, group) {
           if (k < 1e-3) continue
         }
         const v = val(q)
+        // Core peers (close in slot) define the plain-language rank: "No. 1 of 412".
+        if (k >= 0.5) { core++; if (v > mine) above++ }
         sw += k; sw2 += k * k; swa += k * v
         below += v < mine ? k : v === mine ? k / 2 : 0
       }
@@ -277,6 +279,7 @@ function expectation(p, group) {
         exp: p.young ? e * yearsIn(p) : e, // expected value to date
         pct: sw ? Math.round((100 * below) / sw) : 50,
         peers: sw ? Math.round((sw * sw) / sw2) : 0,
+        rank: above + 1, of: core + 1,
       }
       if (out.peers >= MIN_PEERS) return out
     }
@@ -469,8 +472,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'oi', 'from', 'stars', 'rating', 'spct']
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : v ?? 0)
+    'oi', 'rank', 'of', 'from', 'stars', 'rating', 'spct']
+  // spct stays null when there is no recruiting link: null means "unknown", never 0%.
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'spct' ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({

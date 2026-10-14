@@ -31,6 +31,8 @@ export type Player = {
   dna: string
   line: string
   oi: number // Outlier Index, .01–.99
+  rank: number // place among core comparable players (1 = best)
+  of: number
   from: 'recruit' | 'draft' | 'udfa' // the stage the index is measured from
   stars: number
   rating: number
@@ -86,6 +88,11 @@ export const ordinal = (n: number) => {
 export const oiLabel = (x: number) => x.toFixed(2).replace(/^0/, '')
 
 export const pickLabel = (p: Player) => (p.pick ? `Rd ${p.round} · #${p.pick}` : 'Undrafted')
+// Plain-language rank that separates careers sharing the .99 / .01 ceiling.
+export const rankLabel = (p: Player) =>
+  p.rank === 1 ? `No. 1 of ${p.of}` : p.rank === p.of ? `Last of ${p.of}` : `No. ${p.rank} of ${p.of}`
+export const isExtreme = (p: Player) => p.oi >= 0.95 || p.oi <= 0.05
+
 export const shortPick = (p: Player) => (p.pick ? `#${p.pick}` : 'UDFA')
 export const yearsIn = (p: Player, d: Dataset) => Math.max(d.lastSeason - p.year + d.model.seasonFraction, 0.5)
 

@@ -1,29 +1,35 @@
-import { useMemo, useState } from 'react'
-import { gap, GROUPS, signed, type Dataset, type Group } from '../data'
-import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
+import { useEffect, useMemo } from 'react'
+import { gap, GROUPS, signed, type Dataset, type Group, type Player } from '../data'
+import { Chips, currentQuery, GapNum, OI, playerHref, useQueryState, useTip } from '../ui'
 
 const SHRINK = 15 // pseudo-players at zero gap: small samples are pulled toward average
 
 export default function LabPage({ data, college }: { data: Dataset; college?: string }) {
-  const [grp, setGrp] = useState<Group | 'ALL'>('ALL')
-  const [since, setSince] = useState(2000)
-  const [minN, setMinN] = useState(25)
+  const [grp, setGrp] = useQueryState<Group | 'ALL'>('grp', 'ALL')
+  const [since, setSince] = useQueryState<number>('since', 2000)
+  const [minN, setMinN] = useQueryState<number>('min', 25)
   const { tip, setTip } = useTip()
+  useEffect(() => { if (college) document.getElementById('college')?.scrollIntoView() }, [college])
 
   const rows = useMemo(() => {
-    const by = new Map<string, number[]>()
+    const by = new Map<string, Player[]>()
     for (const p of data.players) {
       if (p.young || !p.college || p.year < since || (grp !== 'ALL' && p.grp !== grp)) continue
-      by.set(p.college, [...(by.get(p.college) ?? []), gap(p)])
+      by.set(p.college, [...(by.get(p.college) ?? []), p])
     }
     return [...by.entries()]
-      .filter(([, g]) => g.length >= minN)
-      .map(([name, g]) => {
+      .filter(([, ps]) => ps.length >= minN)
+      .map(([name, ps]) => {
+        const g = ps.map(gap)
+        // Name the player carrying the score when one career is most of it.
+        const top = ps.reduce((a, b) => (gap(b) > gap(a) ? b : a))
+        const total = g.reduce((s, x) => s + x, 0)
+        const driver = total > 0 && gap(top) > total * 0.5 ? `${top.name} (${signed(gap(top), 0)})` : ''
         const n = g.length
         const mean = g.reduce((s, x) => s + x, 0) / n
         const sd = Math.sqrt(g.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(n - 1, 1))
         const se = sd / Math.sqrt(n)
-        return { name, n, mean, lo: mean - 1.96 * se, hi: mean + 1.96 * se, score: (mean * n) / (n + SHRINK), beat: g.filter(x => x > 0).length / n }
+        return { name, driver, n, mean, lo: mean - 1.96 * se, hi: mean + 1.96 * se, score: (mean * n) / (n + SHRINK), beat: g.filter(x => x > 0).length / n }
       })
       .sort((a, b) => b.score - a.score)
   }, [data, grp, since, minN])
@@ -34,8 +40,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
 
   return (
     <div className="wrap" style={{ paddingTop: 56 }}>
-      <div className="kicker"><b>03</b> Development Lab</div>
-      <h1 className="h1" style={{ marginTop: 16 }}>Who sends players<br />who outplay the slot?</h1>
+      <h1 className="h1">Who sends players<br />who outplay the slot?</h1>
       <p className="lede" style={{ marginTop: 20 }}>
         Counting NFL players rewards schools that sign the most talent. This asks a fairer question:
         once the draft has priced a player in (or passed on him), do that school’s alumni beat the price?
@@ -47,19 +52,24 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
           <Chips value={since} onChange={setSince} label="Drafted since" options={[2000, 2005, 2010, 2015]} />
           <Chips value={minN} onChange={setMinN} label="Min. players" options={[10, 25, 50]} />
         </div>
-        <p className="muted" style={{ fontSize: 13, marginBottom: 16, maxWidth: '80ch' }}>
+        <p className="muted" style={{ fontSize: 13, marginBottom: 8, maxWidth: '80ch' }}>
           Ranked by average gap per player, pulled toward zero for small samples. Whiskers show a 95% interval.
           When a whisker crosses the center line, the school isn’t clearly different from average.
+        </p>
+        <p className="meta" style={{ marginBottom: 16, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+          <span><i className="legend-dot" style={{ background: 'var(--over)' }} />clearly above average</span>
+          <span><i className="legend-dot" style={{ background: 'var(--ink-2)' }} />not clearly different</span>
+          <span><i className="legend-dot" style={{ background: 'var(--under)' }} />clearly below average</span>
         </p>
 
         <table className="rows">
           <thead><tr><th>#</th><th>College</th><th className="r">Players</th><th className="r hide-s">Beat slot</th><th style={{ width: '38%' }} className="hide-s">Avg. gap per player (95% CI)</th><th className="r">Avg.</th></tr></thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.name} className="link" onClick={() => (location.hash = `/lab/${encodeURIComponent(r.name)}`)}
+              <tr key={r.name} className="link" onClick={() => (location.hash = `/lab/${encodeURIComponent(r.name)}${currentQuery()}`)}
                 style={r.name === college ? { background: 'var(--paper-2)' } : undefined}>
                 <td className="rank">{i + 1}</td>
-                <td className="name">{r.name}</td>
+                <td className="name"><a href={`#/lab/${encodeURIComponent(r.name)}${currentQuery()}`} onClick={e => e.stopPropagation()}>{r.name}</a>{r.driver && <div className="note">led by {r.driver}</div>}</td>
                 <td className="r num">{r.n}</td>
                 <td className="r num hide-s">{Math.round(r.beat * 100)}%</td>
                 <td className="hide-s"
@@ -74,7 +84,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
                     }} />
                   </div>
                 </td>
-                <td className={`r num ${r.mean >= 0 ? 'over' : 'under'}`}>{signed(r.mean, 1)}</td>
+                <td className="r num"><span className={r.mean >= 0 ? 'over' : 'under'}>{signed(r.mean, 1)[0]}</span>{signed(r.mean, 1).slice(1)}</td>
               </tr>
             ))}
           </tbody>
@@ -84,15 +94,14 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
 
       {college && (
         <div className="section" id="college">
-          <div className="kicker">Player-level evidence</div>
-          <h2 className="h1" style={{ marginTop: 12 }}>{college}</h2>
+          <h2 className="h1">{college}</h2>
           <p className="muted" style={{ marginTop: 8 }}>{focus.length} players drafted since {since}. Every one of them counts toward the number above.</p>
           <table className="rows" style={{ marginTop: 24 }}>
             <thead><tr><th>Player</th><th className="hide-s">Drafted</th><th className="r hide-s">Expected</th><th className="r hide-s">Actual</th><th className="r">Gap</th><th className="r">OI</th></tr></thead>
             <tbody>
               {focus.map(p => (
                 <tr key={p.id} className="link" onClick={() => (location.hash = playerHref(p).slice(1))}>
-                  <td><div className="name">{p.name}</div><div className="sub mono">{p.pos}</div></td>
+                  <td><div className="name"><a href={playerHref(p)} onClick={e => e.stopPropagation()}>{p.name}</a></div><div className="sub mono">{p.pos}</div></td>
                   <td className="mono hide-s">{p.year} · {p.pick ? `#${p.pick}` : 'UDFA'}</td>
                   <td className="r num hide-s faint">{p.exp.toFixed(1)}</td>
                   <td className="r num hide-s">{p.av}{p.est ? '*' : ''}</td>

@@ -21,8 +21,7 @@ export default function PathsPage({ data, archetype }: { data: Dataset; archetyp
 
   return (
     <div className="wrap" style={{ paddingTop: 56 }}>
-      <div className="kicker"><b>02</b> Career DNA</div>
-      <h1 className="h1" style={{ marginTop: 16 }}>Careers have<br />shapes.</h1>
+      <h1 className="h1">Careers have<br />shapes.</h1>
       <p className="lede" style={{ marginTop: 20 }}>
         Grouped by how a career unfolded, not by position or ranking. Every player belongs to exactly one path.
         On any player page you can find the people who walked the same road.
@@ -32,7 +31,7 @@ export default function PathsPage({ data, archetype }: { data: Dataset; archetyp
         <nav className="paths">
           {([['drafted', 'Drafted · completed or long careers'], ['udfa', 'Undrafted'], ['young', 'Early careers · 2022+']] as const).map(([track, title]) => (
             <div key={track}>
-              <div className="kicker" style={{ padding: '18px 0 6px' }}>{title}</div>
+              <h2 className="meta" style={{ padding: '20px 0 6px', fontWeight: 400 }}>{title}</h2>
               {ALL_ARCHETYPES.filter(a => a.track === track).map(a => (
                 <a key={a.name} href={`#/paths/${encodeURIComponent(a.name)}`} className={a === sel ? 'on' : ''}>
                   <span>{a.name}</span>
@@ -45,7 +44,7 @@ export default function PathsPage({ data, archetype }: { data: Dataset; archetyp
         <div>
           <h2 className="h1">{sel.name}</h2>
           <p className="h3 muted" style={{ marginTop: 12, fontWeight: 400 }}>{sel.blurb}</p>
-          <p className="mono faint" style={{ fontSize: 11, marginTop: 8 }}>Rule: {sel.rule}. Rules are checked in order and the first match wins.</p>
+          <p className="mono faint" style={{ fontSize: 12, marginTop: 8 }}>Rule: {sel.rule}. Rules are checked in order and the first match wins.</p>
           <div style={{ marginTop: 32 }}>
             <Scatter players={pool} tone={tone} labels={labels} height={360} />
           </div>
@@ -54,7 +53,7 @@ export default function PathsPage({ data, archetype }: { data: Dataset; archetyp
             <tbody>
               {members.slice(0, n).map(p => (
                 <tr key={p.id} className="link" onClick={() => (location.hash = playerHref(p).slice(1))}>
-                  <td><div className="name">{p.name}</div><div className="sub mono">{p.pos} · {p.college}</div></td>
+                  <td><div className="name"><a href={playerHref(p)} onClick={e => e.stopPropagation()}>{p.name}</a></div><div className="sub mono">{p.pos} · {p.college}</div></td>
                   <td className="mono hide-s">{p.year} · {shortPick(p)}</td>
                   <td className="r num hide-s">{p.av}{p.est ? '*' : ''}</td>
                   <td className="r"><GapNum p={p} /></td>

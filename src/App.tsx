@@ -11,23 +11,25 @@ import MethodPage from './pages/Method'
 import PlayersPage from './pages/Players'
 
 const NAV = [
-  ['/players', '00', 'Players'],
-  ['/gap', '01', 'Expectation Gap'],
-  ['/paths', '02', 'Career DNA'],
-  ['/lab', '03', 'Development Lab'],
-  ['/debate', '04', 'Debate Lab'],
-  ['/method', '05', 'Method'],
+  ['/players', 'Players'],
+  ['/gap', 'Expectation Gap'],
+  ['/paths', 'Career DNA'],
+  ['/lab', 'Development Lab'],
+  ['/debate', 'Debate Lab'],
+  ['/method', 'Method'],
 ] as const
 
 export default function App() {
   const route = useRoute()
   const [data, setData] = useState<Dataset | null>(null)
+  const [failed, setFailed] = useState(false)
   const [searching, setSearching] = useState(false)
   const [theme, setTheme] = useState<string | null>(() => {
     try { return localStorage.getItem('theme') } catch { return null }
   })
 
-  useEffect(() => { loadData().then(setData) }, [])
+  const load = () => { setFailed(false); loadData().then(setData, () => setFailed(true)) }
+  useEffect(load, [])
   useEffect(() => {
     if (theme) document.documentElement.dataset.theme = theme
     else delete document.documentElement.dataset.theme
@@ -51,7 +53,14 @@ export default function App() {
   }
 
   const [, section, arg] = route.split('/')
-  let page = <div className="loading">loading careers…</div>
+  let page = failed
+    ? (
+      <div className="loading" role="alert">
+        <span>The player data didn’t load. Check your connection and try again.</span>
+        <button className="more" style={{ marginTop: 0 }} onClick={load}>Try again</button>
+      </div>
+    )
+    : <div className="loading" aria-busy="true">Loading careers…</div>
   if (data) {
     page =
       section === 'players' ? <PlayersPage data={data} />
@@ -70,9 +79,9 @@ export default function App() {
         <div className="wrap">
           <a href="#/" className="mark" aria-label="Outlier home">OUTLIER<i /></a>
           <nav className="nav">
-            {NAV.map(([href, n, label]) => (
-              <a key={href} href={`#${href}`} className={`/${section}` === href ? 'on' : ''}>
-                <span>{n}</span>{label}
+            {NAV.map(([href, label]) => (
+              <a key={href} href={`#${href}`} className={`/${section}` === href ? 'on' : ''} aria-current={`/${section}` === href ? 'page' : undefined}>
+                {label}
               </a>
             ))}
           </nav>
@@ -87,8 +96,8 @@ export default function App() {
         </div>
       </header>
       <nav className="mobile-nav">
-        {NAV.map(([href, , label]) => (
-          <a key={href} href={`#${href}`} className={`/${section}` === href ? 'on' : ''}>{label}</a>
+        {NAV.map(([href, label]) => (
+          <a key={href} href={`#${href}`} className={`/${section}` === href ? 'on' : ''} aria-current={`/${section}` === href ? 'page' : undefined}>{label}</a>
         ))}
       </nav>
 
@@ -129,6 +138,8 @@ function Search({ data, close }: { data: Dataset; close: () => void }) {
       <div className="palette" onClick={e => e.stopPropagation()} role="dialog" aria-label="Search players">
         <input
           autoFocus placeholder="Type a player or college…" value={q}
+          role="combobox" aria-expanded={results.length > 0} aria-controls="search-results"
+          aria-activedescendant={results.length ? `opt-${sel}` : undefined} aria-label="Search players"
           onChange={e => { setQ(e.target.value); setSel(0) }}
           onKeyDown={e => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s + 1, results.length - 1)) }
@@ -141,16 +152,16 @@ function Search({ data, close }: { data: Dataset; close: () => void }) {
         />
         {q.trim().length >= 2 && (
           results.length ? (
-            <ul>
+            <ul role="listbox" id="search-results" aria-label="Players">
               {results.map((p, i) => (
-                <li key={p.id} className={i === sel ? 'sel' : ''} onMouseEnter={() => setSel(i)}>
+                <li key={p.id} id={`opt-${i}`} role="option" aria-selected={i === sel} className={i === sel ? 'sel' : ''} onMouseEnter={() => setSel(i)}>
                   <a href={playerHref(p)} onClick={close}>
                     <span><strong>{p.name}</strong> <span className="faint">{p.pos} · {p.college}</span></span>
                     <span className="mono faint">{p.year} · {shortPick(p)}</span>
                   </a>
                 </li>
               ))}
-              <li className="all"><a href={`#/players?q=${encodeURIComponent(q)}`} onClick={close}><span>See every match in the directory →</span></a></li>
+              <li className="all" role="presentation"><a href={`#/players?q=${encodeURIComponent(q)}`} onClick={close}><span>See every match in the directory →</span></a></li>
             </ul>
           ) : <div className="empty">No player matches “{q}”.</div>
         )}

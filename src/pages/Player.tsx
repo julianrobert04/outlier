@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  accolades, ALL_ARCHETYPES, gap, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
+  accolades, ALL_ARCHETYPES, gap, isExtreme, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
   shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season,
 } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
@@ -13,7 +13,14 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
   const peers = useMemo(() => (p ? peersOf(p, data) : []), [p, data])
   useEffect(() => { if (p) loadSeasons(p, data).then(setSeasons) }, [p, data])
 
-  if (!p) return <div className="wrap loading">No player with id “{id}”.</div>
+  if (!p) {
+    return (
+      <div className="wrap loading">
+        <span>No player with the id “{id}”. The link may be out of date.</span>
+        <a href="#/players" style={{ textDecoration: 'underline' }}>Search all players →</a>
+      </div>
+    )
+  }
 
   const g = gap(p)
   const arche = ALL_ARCHETYPES.find(a => a.name === p.dna)
@@ -27,14 +34,15 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
 
   return (
     <article className="wrap" style={{ paddingTop: 56 }}>
-      <div className="kicker">
-        <a href="#/players">Players</a> / {GROUP_NAME[p.grp]} / {p.college || 'College unknown'}
-        {p.young ? <b>· Early career</b> : null}
-        {!p.pick ? <b>· Undrafted</b> : null}
-      </div>
+      <nav className="crumbs" aria-label="Breadcrumb">
+        <a href="#/players">Players</a><span aria-hidden="true">/</span>
+        <a href={`#/players?grp=${p.grp}`}>{GROUP_NAME[p.grp]}</a>
+        {p.college && <><span aria-hidden="true">/</span><a href={`#/lab/${encodeURIComponent(p.college)}`}>{p.college}</a></>}
+      </nav>
       <h1 className="h1" style={{ marginTop: 16, maxWidth: '12ch' }}>{p.name}</h1>
       <div className="mono muted" style={{ fontSize: 13, marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: '4px 20px' }}>
         <span>{p.pos}</span>
+        {p.young ? <span>Early career</span> : null}
         <span>{p.pick ? `${p.year} draft · Rd ${p.round}, #${p.pick} · ${p.team}` : `Undrafted · entered ${p.year}${p.team ? ` · ${p.team}` : ''}`}</span>
         <span>{span}</span>
         {p.hof ? <span className="over">Hall of Fame</span> : null}
@@ -50,27 +58,31 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
       {/* Verdict */}
       <section className="section verdict" style={{ marginTop: 40 }}>
         <div>
-          <div className="kicker">{p.young ? 'Outlier Index · early read' : 'Outlier Index'}</div>
-          <div className={`num ${p.oi >= 0.9 ? 'over' : p.oi <= 0.1 ? 'under' : ''}`}
-            style={{ fontSize: 'clamp(110px, 16vw, 220px)', fontWeight: 700, lineHeight: 0.8, letterSpacing: '-0.06em', marginTop: 16 }}>
+          <h2 className="sr-only">Outlier Index</h2>
+          <div className={`num ${p.oi >= 0.95 ? 'over' : p.oi <= 0.05 ? 'under' : ''}`}
+            style={{ fontSize: 'clamp(110px, 16vw, 200px)', fontWeight: 700, lineHeight: 0.8, letterSpacing: '-0.04em' }}>
             {oiLabel(p.oi)}
           </div>
+          <div className="oi-rank">
+            <strong style={{ color: 'var(--ink)' }}>Outlier Index{p.young ? ', early read' : ''}</strong>
+            {isExtreme(p) && <> · {rankLabel(p)} comparable players</>}
+          </div>
           <p className="muted" style={{ marginTop: 20, maxWidth: '34ch' }}>{verdict(p)}</p>
-          <div className="mono faint" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.6 }}>
+          <div className="mono faint" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
             measured from: {p.from === 'recruit' ? `${p.stars}-star recruit` : p.from === 'udfa' ? 'going undrafted' : 'draft slot'}
             {p.young ? <><br />after {yrs.toFixed(1)} seasons · compared on pace with other 2022+ players</> : null}
             {lowConfidence(p, data) && <><br /><span className="under">thin comparison group ({p.peers} peers)</span></>}
           </div>
         </div>
         <div>
-          <div className="kicker">Expectation vs. reality{p.young ? ' · so far' : ''}</div>
+          <h2 className="h3">Expectation vs. reality{p.young ? ', so far' : ''}</h2>
           <div style={{ display: 'flex', gap: 40, marginTop: 16, flexWrap: 'wrap' }}>
             <Stat label={p.young ? 'Expected AV by now' : 'Expected career AV'} value={p.exp.toFixed(1)} />
             <Stat label={`Actual${p.est ? ' (est.)' : ''} AV`} value={String(p.av)} />
-            <Stat label="Gap" value={signed(g, 1)} tone={g >= 0 ? 'over' : 'under'} />
+            <Stat label="Gap" value={signed(g, 1)} tone={isExtreme(p) ? (g >= 0 ? "over" : "under") : undefined} />
           </div>
           <Strip p={p} peers={peers} />
-          <p className="mono faint" style={{ fontSize: 11 }}>
+          <p className="mono faint" style={{ fontSize: 12 }}>
             Dots: {peers.length} {comparedTo}{p.young ? ', scaled to the same time in the league' : ''}.
             {' '}Outplayed {p.pct}% of them.
             {p.est ? ' Career value estimated from games, starts and stats (see Method).' : ''}
@@ -80,13 +92,15 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
 
       {/* Journey */}
       <section className="section">
-        <div className="kicker" style={{ marginBottom: 24 }}>The journey</div>
+        <h2 className="h3" style={{ marginBottom: 24 }}>The journey</h2>
         <ol className="journey">
           <Stage n="01" title="High school"
             main={p.from === 'recruit' ? `${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}` : '—'}
             sub={p.from === 'recruit' ? `247 composite ${p.rating.toFixed(4)}` : 'Recruiting rating not linked yet'} />
           <Stage n="02" title="College" main={p.college || '—'}
-            sub={p.spct != null ? `Draft outcome beat ${Math.round(p.spct * 100)}% of same-star recruits` : 'College stats arrive with recruiting data'} />
+            sub={p.from === 'recruit' && p.spct != null
+              ? `Draft outcome beat ${Math.round(p.spct * 100)}% of same-star recruits`
+              : collegeLine(p, data)} />
           <Stage n="03" title="Draft" main={p.pick ? `#${p.pick}` : 'UDFA'}
             sub={p.pick ? `${ordinal(p.round)} round · ${p.team} · ${p.year}` : `Signed after the ${p.year} draft`} />
           <Stage n="04" title={p.young ? 'NFL so far' : 'NFL career'} main={`${p.av} AV${p.est ? '*' : ''}`}
@@ -104,11 +118,11 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
 
       {/* Season by season */}
       <section className="section">
-        <div className="kicker" style={{ marginBottom: 24 }}>Season by season · NFL regular season</div>
+        <h2 className="h3" style={{ marginBottom: 24 }}>Season by season <span className="muted" style={{ fontWeight: 400 }}>· NFL regular season</span></h2>
         {seasons === null ? <p className="faint mono" style={{ fontSize: 12 }}>loading…</p>
           : seasons.length ? <SeasonTable grp={p.grp} rows={seasons} />
             : <p className="faint">No regular-season games on record.</p>}
-        <p className="mono faint" style={{ fontSize: 11, marginTop: 12 }}>
+        <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>
           GS = games started: first string on the depth chart (2001–11) or ≥50% of snaps (2012+). Stats from nflverse.
         </p>
       </section>
@@ -117,9 +131,8 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
       <section className="section">
         <div className="section-head">
           <div>
-            <div className="kicker">Career DNA</div>
-            <h2 className="h2" style={{ marginTop: 12 }}>
-              <a href={`#/paths/${encodeURIComponent(p.dna)}`}>{p.dna} →</a>
+            <h2 className="h2">
+              Career DNA: <a href={`#/paths/${encodeURIComponent(p.dna)}`} style={{ textDecoration: 'underline', textDecorationThickness: 2, textUnderlineOffset: 6 }}>{p.dna}</a>
             </h2>
             {arche && <p className="muted" style={{ marginTop: 8 }}>{arche.blurb}</p>}
           </div>
@@ -139,7 +152,7 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
           <tbody>
             {similar.map(({ p: q }) => (
               <tr key={q.id} className="link" onClick={() => (location.hash = playerHref(q).slice(1))}>
-                <td><div className="name">{q.name}</div><div className="sub mono">{q.pos} · {q.college}</div></td>
+                <td><div className="name"><a href={playerHref(q)} onClick={e => e.stopPropagation()}>{q.name}</a></div><div className="sub mono">{q.pos} · {q.college}</div></td>
                 <td className="mono hide-s">{q.year} · {shortPick(q)}</td>
                 <td className="hide-s muted">{q.dna}</td>
                 <td className="r"><GapNum p={q} /></td>
@@ -151,6 +164,12 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
       </section>
     </article>
   )
+}
+
+function collegeLine(p: Player, d: Dataset) {
+  if (!p.college) return 'College not on record'
+  const n = d.players.filter(q => q.college === p.college && !q.young).length
+  return `One of ${n.toLocaleString()} ${p.college} players in the NFL since ${d.model.firstClass}`
 }
 
 function verdict(p: Player) {
@@ -175,7 +194,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'ov
   return (
     <div>
       <div className={`num ${tone ?? ''}`} style={{ fontSize: 44, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.04em' }}>{value}</div>
-      <div className="mono faint" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 6 }}>{label}</div>
+      <div className="mono faint" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 6 }}>{label}</div>
     </div>
   )
 }
@@ -183,7 +202,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'ov
 function Stage({ n, title, main, sub }: { n: string; title: string; main: string; sub: string }) {
   return (
     <li>
-      <span className="mono faint" style={{ fontSize: 11 }}>{n} · {title}</span>
+      <span className="mono faint" style={{ fontSize: 12 }}>{n} · {title}</span>
       <span className="journey-main">{main}</span>
       <span className="faint" style={{ fontSize: 12 }}>{sub}</span>
     </li>
@@ -240,10 +259,13 @@ function Strip({ p, peers }: { p: Player; peers: { p: Player; v: number }[] }) {
   const max = Math.max(p.av, p.exp, ...peers.map(q => q.v), 10) * 1.05
   const X = (v: number) => `${(v / max) * 100}%`
   return (
-    <div style={{ position: 'relative', height: 96, margin: '32px 0 12px' }}>
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 48, borderTop: '1px solid var(--rule)' }} />
+    <div style={{ position: 'relative', height: 96, margin: '32px 0 16px' }}>
+      <p className="sr-only">
+        {p.name} has {p.av} career AV against {p.exp.toFixed(1)} expected, more than {p.pct}% of {peers.length} comparable players.
+      </p>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 48, borderTop: '1px solid var(--rule)' }} aria-hidden="true" />
       {peers.slice(0, 400).map(({ p: q, v }, i) => (
-        <a key={q.id} href={playerHref(q)}
+        <a key={q.id} href={playerHref(q)} tabIndex={-1} aria-hidden="true"
           onMouseEnter={e => setTip({ x: e.clientX, y: e.clientY, body: <><b>{q.name}</b><span className="mono">{q.year} · {shortPick(q)} · {q.av} AV{q.est ? ' est.' : ''}</span></> })}
           onMouseLeave={() => setTip(null)}
           style={{
@@ -252,13 +274,13 @@ function Strip({ p, peers }: { p: Player; peers: { p: Player; v: number }[] }) {
           }} />
       ))}
       <div style={{ position: 'absolute', left: X(p.exp), top: 14, bottom: 14, borderLeft: '2px dashed var(--ink-2)' }} />
-      <div className="mono faint" style={{ position: 'absolute', left: X(p.exp), top: -6, fontSize: 10, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>expected</div>
+      <div className="mono faint" style={{ position: 'absolute', left: X(p.exp), top: -6, fontSize: 12, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>expected</div>
       <div style={{
         position: 'absolute', left: X(p.av), top: 48, width: 18, height: 18, marginLeft: -9, marginTop: -9, borderRadius: '50%',
         background: gap(p) >= 0 ? 'var(--over)' : 'var(--under)', boxShadow: '0 0 0 3px var(--paper)',
       }} />
-      <div className="mono" style={{ position: 'absolute', left: X(p.av), bottom: -8, fontSize: 10, transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontWeight: 700 }}>{p.name.split(' ').slice(-1)[0]}</div>
-      <div className="mono faint" style={{ position: 'absolute', left: 0, bottom: -8, fontSize: 10 }}>0 AV</div>
+      <div className="mono" aria-hidden="true" style={{ position: 'absolute', left: X(p.av), bottom: -12, fontSize: 12, transform: `translateX(${p.av / max > 0.8 ? '-100%' : '-50%'})`, whiteSpace: 'nowrap', fontWeight: 700 }}>{p.name}</div>
+      <div className="mono faint" aria-hidden="true" style={{ position: 'absolute', left: 0, top: 58, fontSize: 12 }}>0</div>
       {tip}
     </div>
   )

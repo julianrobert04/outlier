@@ -13,6 +13,28 @@ export function useRoute() {
 }
 
 export const go = (path: string) => { location.hash = path }
+
+// Filter state lives in the hash query (#/players?grp=QB&sort=oi), so Back
+// restores it and a filtered view can be shared. replaceState doesn't add
+// history entries or remount the page.
+const readQuery = () => new URLSearchParams(location.hash.split('?')[1] ?? '')
+export function useQueryState<T extends string | number>(key: string, initial: T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    const raw = readQuery().get(key)
+    if (raw == null) return initial
+    return (typeof initial === 'number' ? Number(raw) : raw) as T
+  })
+  const set = (v: T) => {
+    setValue(v)
+    const q = readQuery()
+    if (v === initial) q.delete(key); else q.set(key, String(v))
+    const path = location.hash.slice(1).split('?')[0] || '/'
+    const qs = q.toString()
+    history.replaceState(null, '', `#${path}${qs ? `?${qs}` : ''}`)
+  }
+  return [value, set]
+}
+export const currentQuery = () => { const q = location.hash.split('?')[1]; return q ? `?${q}` : '' }
 export const playerHref = (p: Player) => `#/p/${p.id}`
 
 export function Chips<T extends string | number>({ value, options, onChange, label }: {
@@ -46,15 +68,20 @@ export function GapBar({ value, max }: { value: number; max: number }) {
   )
 }
 
+// Gap values stay in ink; only the sign carries the over/under color.
 export function GapNum({ p, digits = 1 }: { p: Player; digits?: number }) {
-  const g = gap(p)
-  return <span className={`num ${g >= 0 ? 'over' : 'under'}`}>{signed(g, digits)}</span>
+  const s = signed(gap(p), digits)
+  return (
+    <span className="num">
+      <span className={gap(p) >= 0 ? 'over' : 'under'}>{s[0]}</span>{s.slice(1)}
+    </span>
+  )
 }
 
 export function OI({ value, size = 15 }: { value: number; size?: number }) {
-  const cls = value >= 0.9 ? 'over' : value <= 0.1 ? 'under' : ''
+  const cls = value >= 0.95 ? 'over' : value <= 0.05 ? 'under' : ''
   return (
-    <span className={`oi ${cls}`} style={{ fontSize: size }} title="Outlier Index">
+    <span className={`oi ${cls}`} style={{ fontSize: size }} title="Outlier Index: share of comparable players with a worse career">
       <span className="v">{oiLabel(value)}</span>
     </span>
   )

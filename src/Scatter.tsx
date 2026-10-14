@@ -35,6 +35,7 @@ export default function Scatter({ players, height = 460, labels = [], focus, ton
   const [w, setW] = useState(800)
   const [themeTick, setThemeTick] = useState(0)
   const [hover, setHover] = useState<Player | null>(null)
+  const pointer = useRef('mouse')
   const { tip, setTip } = useTip()
 
   useEffect(() => {
@@ -187,9 +188,20 @@ export default function Scatter({ players, height = 460, labels = [], focus, ton
           setTip(p ? { x: e.clientX, y: e.clientY, body: <PlayerTip p={p} /> } : null)
         }}
         onMouseLeave={() => { setHover(null); setTip(null) }}
-        onClick={e => { const p = nearest(e); if (p) go(playerHref(p).slice(1)) }}
+        onPointerDown={e => { pointer.current = e.pointerType }}
+        onClick={e => {
+          const p = nearest(e)
+          if (!p) return
+          // Touch: first tap previews the dot, second tap on the same dot opens it.
+          if (pointer.current === 'touch' && hover !== p) {
+            setHover(p)
+            setTip({ x: e.clientX, y: e.clientY, body: <PlayerTip p={p} /> })
+            return
+          }
+          go(playerHref(p).slice(1))
+        }}
         role="img"
-        aria-label={`Scatter of ${players.length} drafted players: draft pick against career value`}
+        aria-label={`Scatter of ${players.length} players: draft pick against career value. Every player is also listed in the Players directory.`}
       />
       {tip}
     </div>

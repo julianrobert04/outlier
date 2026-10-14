@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
-import { accolades, gap, GROUPS, oiLabel, shortPick, type Dataset, type Group, type Player } from '../data'
+import { accolades, gap, GROUPS, oiLabel, rankLabel, shortPick, type Dataset, type Group, type Player } from '../data'
 import Scatter from '../Scatter'
 import { Chips, GapNum, OI, playerHref } from '../ui'
+
+const touch = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches
 
 export default function Home({ data, onSearch }: { data: Dataset; onSearch: () => void }) {
   const [grp, setGrp] = useState<Group | 'ALL'>('ALL')
@@ -17,21 +19,23 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
   const gems = finished.filter(p => !p.pick).sort((a, b) => b.av - a.av).slice(0, 5)
   const rising = useMemo(() => data.players.filter(p => p.young && (grp === 'ALL' || p.grp === grp))
     .sort((a, b) => b.oi - a.oi || b.av - a.av).slice(0, 6), [data, grp])
-  const top = byGap.find(p => p.pick >= 100)!
+  // The over-performer exemplar: the most valuable undrafted career (Brady already
+  // anchors the chart and the Beat-the-slot list).
+  const top = [...finished].filter(p => !p.pick).sort((a, b) => b.av - a.av)[0] ?? byGap[0]
   const bottom = under[0]
 
   return (
     <>
       <section className="wrap" style={{ padding: '72px var(--gutter) 40px' }}>
-        <div className="kicker"><b>●</b> {data.players.length.toLocaleString()} NFL careers · drafted &amp; undrafted · {data.model.firstClass}–{data.model.lastClass}</div>
-        <h1 className="display" style={{ marginTop: 20 }}>Football,<br />seen differently.</h1>
+        <h1 className="display">Football,<br />seen differently.</h1>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'end', justifyContent: 'space-between', marginTop: 32 }}>
           <p className="lede">
             Every career, measured against what was expected of it. Not who was best,
             but who became <em>more</em>, or less, than anyone predicted.
           </p>
-          <button className="search-btn" style={{ minWidth: 280, padding: '12px 14px', margin: 0 }} onClick={onSearch}>
-            <span>Find a player</span><kbd>/</kbd>
+          <button className="search-btn" style={{ minWidth: 280, padding: '12px 14px', margin: 0, color: 'var(--ink-2)' }} onClick={onSearch}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="7" cy="7" r="5" /><path d="m11 11 3.5 3.5" /></svg>
+            <span>Find any of {data.players.length.toLocaleString()} players</span><kbd>/</kbd>
           </button>
         </div>
       </section>
@@ -39,14 +43,14 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
       <section className="wrap" style={{ paddingBottom: 56 }}>
         <div className="controls" style={{ justifyContent: 'space-between' }}>
           <Chips value={grp} onChange={setGrp} options={['ALL', ...GROUPS] as (Group | 'ALL')[]} label="Position" />
-          <div className="mono faint" style={{ fontSize: 11, display: 'flex', gap: 16 }}>
-            <span><span className="over">●</span> beat 97% of comparable players</span>
-            <span><span className="under">●</span> 1st-rounder outplayed by 97% of comparable picks</span>
+          <div className="mono faint" style={{ fontSize: 12, display: 'flex', gap: 16 }}>
+            <span><i className="legend-dot" style={{ background: 'var(--over)' }} />beat 97% of comparable players</span>
+            <span><i className="legend-dot" style={{ background: 'var(--under)' }} />1st-rounder outplayed by 97% of comparable picks</span>
           </div>
         </div>
         <Scatter players={players} labels={labels} height={Math.min(560, Math.max(380, window.innerHeight * 0.6))} />
-        <p className="mono faint" style={{ fontSize: 11, marginTop: 12 }}>
-          Each dot is one player who entered the league {data.model.firstClass}–{data.model.lastJudgedClass}; undrafted players sit in the right-hand column (value estimated). The line is what a pick at that slot usually becomes. Hover to read, click to open.
+        <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>
+          Each dot is one player who entered the league {data.model.firstClass}–{data.model.lastJudgedClass}; undrafted players sit in the right-hand column (value estimated). The line is what a pick at that slot usually becomes. {touch ? 'Tap a dot to read it; tap again to open.' : 'Hover to read, click to open.'}
         </p>
       </section>
 
@@ -54,8 +58,7 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
         <div className="section">
           <div className="section-head">
             <div>
-              <div className="kicker">The signature metric</div>
-              <h2 className="h1" style={{ marginTop: 12 }}>Outlier<br />Index</h2>
+              <h2 className="h1">Outlier<br />Index</h2>
             </div>
             <div className="prose">
               <p>
@@ -91,11 +94,10 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
         <div className="section">
           <div className="section-head">
             <div>
-              <div className="kicker">Early reads · classes {data.model.youngFrom}–{data.model.lastClass}</div>
-              <h2 className="h1" style={{ marginTop: 12 }}>Rising</h2>
+              <h2 className="h1">Rising</h2>
             </div>
             <p className="prose">
-              Young careers can’t be judged against finished ones. Players from the {data.model.youngFrom}–{String(data.model.lastClass).slice(2)} classes
+              Early reads on the {data.model.youngFrom}–{data.model.lastClass} classes. Young careers can’t be judged against finished ones, so players from the {data.model.youngFrom}–{String(data.model.lastClass).slice(2)} classes
               are ranked on <strong>pace</strong>: career value per season so far, compared only with other young players drafted at a similar slot.
               Each comes with the accolades a short career can already hold.
             </p>
@@ -103,10 +105,13 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
           <div className="rising">
             {rising.map(p => (
               <a key={p.id} href={playerHref(p)} className="rise">
-                <OI value={p.oi} size={40} />
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                  <OI value={p.oi} size={40} />
+                  <span className="meta">{rankLabel(p)}</span>
+                </div>
                 <div className="h3" style={{ marginTop: 10 }}>{p.name}</div>
-                <div className="mono faint" style={{ fontSize: 11 }}>{p.pos} · {p.year} · {shortPick(p)} · {p.av} AV</div>
-                <div className="mono" style={{ fontSize: 11, marginTop: 8, color: 'var(--over)' }}>{accolades(p).slice(0, 2).join(' · ')}</div>
+                <div className="meta">{p.pos} · {p.year} · {shortPick(p)} · {p.av} AV</div>
+                <div className="badges" style={{ marginTop: 12 }}>{accolades(p).slice(0, 2).map(a => <span key={a}>{a}</span>)}</div>
               </a>
             ))}
           </div>
@@ -116,19 +121,18 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
 
       <section className="wrap">
         <div className="section" style={{ paddingBottom: 0 }}>
-          <div className="kicker" style={{ marginBottom: 24 }}>Investigate</div>
+          <h2 className="h3" style={{ marginBottom: 24 }}>Keep exploring</h2>
           {[
-            ['#/players', '00', 'Players', 'Search every career, drafted and undrafted, with season-by-season stats.'],
-            ['#/gap', '01', 'Expectation Gap', 'Rank careers by how far they drifted from the draft’s prediction.'],
-            ['#/paths', '02', 'Career DNA', 'Find players who walked the same road, across any era.'],
-            ['#/lab', '03', 'Development Lab', 'Which colleges send players who outplay their draft slot?'],
-            ['#/debate', '04', 'Debate Lab', 'Test football’s favorite arguments against every draft since 2000.'],
-          ].map(([href, n, t, d]) => (
+            ['#/players', 'Players', 'Search every career, drafted and undrafted, with season-by-season stats.'],
+            ['#/gap', 'Expectation Gap', 'Rank careers by how far they drifted from the draft’s prediction.'],
+            ['#/paths', 'Career DNA', 'Find players who walked the same road, across any era.'],
+            ['#/lab', 'Development Lab', 'Which colleges send players who outplay their draft slot?'],
+            ['#/debate', 'Debate Lab', 'Test football’s favorite arguments against every draft since 2000.'],
+          ].map(([href, t, d]) => (
             <a key={href} href={href} className="entry">
-              <span className="mono faint">{n}</span>
               <span className="h2">{t}</span>
               <span className="muted">{d}</span>
-              <span className="arrow">→</span>
+              <span className="arrow" aria-hidden="true">→</span>
             </a>
           ))}
         </div>
@@ -140,13 +144,14 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
 function Extreme({ p, kind }: { p: Player; kind: 'over' | 'under' }) {
   return (
     <a href={playerHref(p)} className="extreme" style={{ display: 'block' }}>
-      <div className={`num ${kind}`} style={{ fontSize: 'clamp(88px, 14vw, 180px)', fontWeight: 700, lineHeight: 0.85, letterSpacing: '-0.06em' }}>
+      <div className={`num ${kind}`} style={{ fontSize: 'clamp(88px, 14vw, 180px)', fontWeight: 700, lineHeight: 0.85, letterSpacing: '-0.04em' }}>
         {oiLabel(p.oi)}
       </div>
       <div className="h3" style={{ marginTop: 16 }}>{p.name}</div>
-      <div className="mono faint" style={{ fontSize: 12 }}>
-        {p.pos} · {p.year} · {shortPick(p)} · {p.av} AV vs {p.exp.toFixed(0)} expected
+      <div className="meta">
+        {p.pos} · {p.pick ? `${p.year} · ${shortPick(p)}` : `undrafted, ${p.year}`} · {p.av}{p.est ? '*' : ''} AV vs {p.exp.toFixed(0)} expected
       </div>
+      <div className="oi-rank">{rankLabel(p)} comparable {p.pick ? 'picks' : 'undrafted players'}</div>
     </a>
   )
 }
@@ -162,7 +167,7 @@ function MiniList({ title, sub, list }: { title: string; sub: string; list: Play
             <tr key={p.id} className="link" onClick={() => (location.hash = playerHref(p).slice(1))}>
               <td className="rank">{i + 1}</td>
               <td>
-                <div className="name">{p.name}</div>
+                <div className="name"><a href={playerHref(p)} onClick={e => e.stopPropagation()}>{p.name}</a></div>
                 <div className="sub mono">{p.pos} · {shortPick(p)} · {p.year}</div>
               </td>
               <td className="r"><GapNum p={p} digits={0} /></td>

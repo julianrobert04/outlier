@@ -31,8 +31,7 @@ function spearman(a: number[], b: number[]) {
 export default function DebatePage({ data }: { data: Dataset }) {
   return (
     <div className="wrap" style={{ paddingTop: 56 }}>
-      <div className="kicker"><b>04</b> Debate Lab</div>
-      <h1 className="h1" style={{ marginTop: 16 }}>Football’s<br />uncomfortable questions.</h1>
+      <h1 className="h1">Football’s<br />uncomfortable questions.</h1>
       <p className="lede" style={{ marginTop: 20 }}>
         Every argument becomes something you can test. Change the filters and build your own answer.
         Every number links back to the players behind it.
@@ -49,8 +48,7 @@ function Question({ n, q, answer, children }: { n: string; q: string; answer: Re
     <section className="section" style={{ marginTop: 48 }}>
       <div className="section-head">
         <div>
-          <div className="kicker">Question {n}</div>
-          <h2 className="h2" style={{ marginTop: 12 }}>{q}</h2>
+          <h2 className="h2" id={`q${n}`}>{q}</h2>
         </div>
         <div className="h3" style={{ fontWeight: 400, fontSize: 20, maxWidth: '44ch' }}>{answer}</div>
       </div>
@@ -76,7 +74,7 @@ function RoundsQuestion({ data }: { data: Dataset }) {
       answer={<>Usually. But <span className="num over">{Math.round(share * 100)}%</span> of second-rounders out-produced the typical first-rounder ({m1} career AV){grp !== 'ALL' && <> among {GROUP_NAME[grp].toLowerCase()}</>}.</>}>
       <div className="controls"><Chips value={grp} onChange={setGrp} label="Position" options={['ALL', ...GROUPS] as (Group | 'ALL')[]} /></div>
       <Bars bars={bars} unit="median career AV" />
-      <p className="mono faint" style={{ fontSize: 11, marginTop: 12 }}>Draft classes 2000–{FULL_CAREER_CUTOFF} ({pool.length.toLocaleString()} players), so careers are essentially complete.</p>
+      <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>Draft classes 2000–{FULL_CAREER_CUTOFF} ({pool.length.toLocaleString()} players), so careers are essentially complete.</p>
     </Question>
   )
 }
@@ -94,7 +92,7 @@ function RiskQuestion({ data }: { data: Dataset }) {
       answer={<><span className="num under">{worst.value}%</span> of first-round {GROUP_NAME[worst.label as Group].toLowerCase()} became busts, against <span className="num">{best.value}%</span> of {GROUP_NAME[best.label as Group].toLowerCase()}.</>}>
       <div className="controls"><Chips value={since} onChange={setSince} label="Drafted since" options={[2000, 2005, 2010, 2015]} /></div>
       <Bars bars={bars} unit="% of 1st-rounders who finished below 85% of comparable picks" suffix="%" tone="under" />
-      <p className="mono faint" style={{ fontSize: 11, marginTop: 12 }}>A bust here is a first-round pick who finished below 85% of comparable picks at the same position and era.</p>
+      <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>A bust here is a first-round pick who finished below 85% of comparable picks at the same position and era.</p>
     </Question>
   )
 }
@@ -139,7 +137,7 @@ function SmarterQuestion({ data }: { data: Dataset }) {
         ))}
       </svg>
       {tip}
-      <p className="mono faint" style={{ fontSize: 11, marginTop: 12 }}>Spearman rank correlation between draft order and career AV within each class (1 = perfectly ordered). Hollow points: careers still young.</p>
+      <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>Spearman rank correlation between draft order and career AV within each class (1 = perfectly ordered). Hollow points: careers still young.</p>
     </Question>
   )
 }
@@ -156,7 +154,7 @@ function Bars({ bars, unit, suffix = '', tone }: { bars: { label: string; value:
   const max = Math.max(...bars.map(b => b.value), 1)
   return (
     <div>
-      <div className="mono faint" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>{unit}</div>
+      <div className="mono faint" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>{unit}</div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${bars.length}, 1fr)`, gap: 2, alignItems: 'end', height: 220, borderBottom: '1px solid var(--ink)' }}>
         {bars.map((b, i) => (
           <div key={b.label} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'end', height: '100%', cursor: 'default' }}
@@ -171,7 +169,7 @@ function Bars({ bars, unit, suffix = '', tone }: { bars: { label: string; value:
         ))}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${bars.length}, 1fr)`, gap: 2, marginTop: 8 }}>
-        {bars.map(b => <span key={b.label} className="mono faint" style={{ fontSize: 11, textAlign: 'center' }}>{b.label}</span>)}
+        {bars.map(b => <span key={b.label} className="mono faint" style={{ fontSize: 12, textAlign: 'center' }}>{b.label}</span>)}
       </div>
       {tip}
     </div>

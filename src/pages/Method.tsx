@@ -3,8 +3,7 @@ import type { Dataset } from '../data'
 export default function MethodPage({ data }: { data: Dataset }) {
   return (
     <div className="wrap" style={{ paddingTop: 56 }}>
-      <div className="kicker"><b>05</b> Method</div>
-      <h1 className="h1" style={{ marginTop: 16 }}>How the<br />numbers work.</h1>
+      <h1 className="h1">How the<br />numbers work.</h1>
       <p className="lede" style={{ marginTop: 20 }}>No black boxes. Every number on Outlier comes from the rules on this page and the public data below.</p>
 
       <Block t="Data">
