@@ -21,6 +21,13 @@ export default function MethodPage({ data }: { data: Dataset }) {
           <strong>Recruiting ratings</strong> (247Sports composite, via CollegeFootballData.com):{' '}
           {data.recruitingLinked ? `${data.recruitingLinked.toLocaleString()} players linked by name, school and years, from recruiting classes 2000–${data.model.lastClass}. Classes before about 2003 are thin in the source, so early careers are linked less often.` : 'not connected yet. When they are, the Outlier Index starts from high school.'}
         </p>
+        <p>
+          <strong>College stats</strong> (CollegeFootballData.com): regular-season passing, rushing, receiving, returns and kicking from about
+          {' '}{data.coverage.college.offenseFrom}, defensive tackles, tackles for loss, sacks, hurries and passes defended from {data.coverage.college.defenseFrom}.
+          {' '}{data.collegeLinked.toLocaleString()} players linked by name, school and years. There are no individual stats for offensive linemen.
+          <strong> College production</strong> is a position-specific score from career college totals, shown as a percentile against every NFL
+          player at the same position with college stats. It is context on the journey, not part of the Outlier Index.
+        </p>
       </Block>
 
       <Block t="Undrafted players">

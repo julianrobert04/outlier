@@ -450,6 +450,79 @@ async function outlierIndex(players) {
   return linked
 }
 
+// ── College stats ──────────────────────────────────────────────────────────
+// Season stats from CollegeFootballData.com (scripts/fetch-college.mjs), linked
+// to players by name, college and years before the NFL. Offense from ~2007,
+// defense from 2016, nothing for linemen.
+
+const COLLEGE_COLS = ['season', 'team', 'cmp', 'att', 'pyd', 'ptd', 'int', 'car', 'ryd', 'rtd', 'rec', 'recyd', 'rectd',
+  'tot', 'solo', 'tfl', 'sk', 'hur', 'pd', 'dint', 'dtd', 'kry', 'pry', 'fgm', 'fga']
+const COLLEGE_MAP = {
+  'passing.COMPLETIONS': 'cmp', 'passing.ATT': 'att', 'passing.YDS': 'pyd', 'passing.TD': 'ptd', 'passing.INT': 'int',
+  'rushing.CAR': 'car', 'rushing.YDS': 'ryd', 'rushing.TD': 'rtd', 'receiving.REC': 'rec', 'receiving.YDS': 'recyd',
+  'receiving.TD': 'rectd', 'defensive.TOT': 'tot', 'defensive.SOLO': 'solo', 'defensive.TFL': 'tfl', 'defensive.SACKS': 'sk',
+  'defensive.QB HUR': 'hur', 'defensive.PD': 'pd', 'defensive.TD': 'dtd', 'interceptions.INT': 'dint',
+  'kickReturns.YDS': 'kry', 'puntReturns.YDS': 'pry', 'kicking.FGM': 'fgm', 'kicking.FGA': 'fga',
+}
+const COLLEGE_DEFENSE_FROM = 2016
+
+// College production: one position-specific number from career college totals.
+const PRODUCTION = {
+  QB: t => t.pyd + 20 * t.ptd - 45 * t.int + t.ryd + 20 * t.rtd,
+  RB: t => t.ryd + t.recyd + 20 * (t.rtd + t.rectd),
+  WR: t => t.recyd + 20 * t.rectd + t.ryd,
+  TE: t => t.recyd + 20 * t.rectd,
+  DL: t => t.tot + 5 * t.tfl + 10 * t.sk + 3 * t.hur,
+  LB: t => t.tot + 5 * t.tfl + 10 * t.sk + 3 * t.hur + 5 * t.pd + 20 * t.dint,
+  DB: t => t.tot + 20 * t.dint + 5 * t.pd + 5 * t.tfl,
+}
+const DEFENSIVE = new Set(['DL', 'LB', 'DB'])
+
+async function linkCollege(players) {
+  const dir = `${RAW}/college`
+  if (!existsSync(dir)) return 0
+  const cf = new Map() // CFBD playerId → { name, seasons: Map(year → row) }
+  for (let y = 2004; y <= LAST_CLASS; y++) {
+    if (!existsSync(`${dir}/${y}.json`)) continue
+    for (const [id, name, , team, cat, type, stat] of JSON.parse(await readFile(`${dir}/${y}.json`, 'utf8'))) {
+      const key = COLLEGE_MAP[`${cat}.${type}`]
+      if (!key) continue
+      if (!cf.has(id)) cf.set(id, { name, seasons: new Map() })
+      const ss = cf.get(id).seasons
+      if (!ss.has(y)) ss.set(y, { season: y, team, ...Object.fromEntries(COLLEGE_COLS.slice(2).map(k => [k, 0])) })
+      ss.get(y)[key] += num(stat)
+    }
+  }
+  const byName = new Map()
+  for (const c of cf.values()) byName.set(normName(c.name), [...(byName.get(normName(c.name)) ?? []), c])
+
+  let linked = 0
+  for (const p of players) {
+    const window = c => [...c.seasons.keys()].some(y => y < p.year && y >= p.year - 6)
+    const cands = (byName.get(normName(p.name)) ?? []).filter(window)
+    const school = normSchool(p.college || '')
+    const c = cands.find(c => [...c.seasons.values()].some(s => normSchool(s.team) === school)) ??
+      (cands.length === 1 ? cands[0] : null)
+    if (!c || c.taken) continue
+    c.taken = true
+    p.collegeRows = [...c.seasons.values()].filter(s => s.season < p.year).sort((a, b) => a.season - b.season)
+    linked++
+  }
+
+  // College production percentile within position group, among linked players.
+  // Defensive groups only count players whose college years had defensive stats.
+  for (const [g, f] of Object.entries(PRODUCTION)) {
+    const group = players.filter(p => p.grp === g && p.collegeRows?.length &&
+      (!DEFENSIVE.has(g) || p.collegeRows.some(s => s.season >= COLLEGE_DEFENSE_FROM)))
+    const vals = group.map(p => {
+      const t = Object.fromEntries(COLLEGE_COLS.slice(2).map(k => [k, p.collegeRows.reduce((s, r) => s + r[k], 0)]))
+      return f(t)
+    })
+    group.forEach((p, i) => { p.cpct = clampOI(midRank(vals[i], vals)) })
+  }
+  return linked
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -528,6 +601,8 @@ async function main() {
     for (const g of byGroup.keys()) cls.filter(p => p.grp === g).forEach((p, i) => { p.posRank = i + 1 })
   }
   const recruited = await outlierIndex(players)
+  const collegeLinked = await linkCollege(players)
+  for (const p of players) { p.cpct ??= null; p.cseasons = p.collegeRows?.length ?? 0 }
 
   // Season-by-season careers, sharded so a player page loads ~1/64 of them.
   await rm(`${OUT}/careers`, { recursive: true, force: true })
@@ -537,13 +612,20 @@ async function main() {
     if (p.rows.length) shards[shardOf(p.id)][p.id] = p.rows.map(s => SEASON_COLS.map(c => s[c]))
   }
   await Promise.all(shards.map((s, i) => writeFile(`${OUT}/careers/${i}.json`, JSON.stringify(s))))
+  await rm(`${OUT}/college`, { recursive: true, force: true })
+  await mkdir(`${OUT}/college`, { recursive: true })
+  const cshards = Array.from({ length: SHARDS }, () => ({}))
+  for (const p of players) {
+    if (p.collegeRows?.length) cshards[shardOf(p.id)][p.id] = p.collegeRows.map(s => COLLEGE_COLS.map(c => s[c]))
+  }
+  await Promise.all(cshards.map((s, i) => writeFile(`${OUT}/college/${i}.json`, JSON.stringify(s))))
 
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'oi', 'rank', 'of', 'from', 'stars', 'rating', 'spct']
+    'oi', 'rank', 'of', 'from', 'stars', 'rating', 'spct', 'cpct', 'cseasons']
   // spct stays null when there is no recruiting link: null means "unknown", never 0%.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'spct' ? v ?? null : v ?? 0)
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'spct' || f === 'cpct' ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({
@@ -556,19 +638,21 @@ async function main() {
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,
+    collegeCols: COLLEGE_COLS,
+    collegeLinked,
     coverage: {
       startsFrom: { depthCharts: range(2001, 2024).filter(y => !snapSeasons.has(y)), snapCounts: [...snapSeasons].sort() },
       noStarts: [2000],
       noTargets: range(2003, 2008),
       advancedFrom: ADV_FROM,
       runStatsFrom: FIRST_CLASS,
-      college: false,
+      college: { offenseFrom: 2007, defenseFrom: COLLEGE_DEFENSE_FROM },
     },
     recruitingLinked: recruited,
     fields, rows,
   }))
   const und = players.filter(p => !p.pick).length
-  console.log(`${players.length} players (${und} undrafted, ${recruited} linked to recruiting) → ${OUT}`)
+  console.log(`${players.length} players (${und} undrafted, ${recruited} linked to recruiting, ${collegeLinked} to college stats) → ${OUT}`)
   console.log('AV model R²:', Object.entries(models).map(([g, m]) => `${g} ${m.r2}`).join(' · '))
 }
 

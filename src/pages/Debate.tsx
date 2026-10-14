@@ -39,6 +39,7 @@ export default function DebatePage({ data }: { data: Dataset }) {
       <RoundsQuestion data={data} />
       <RiskQuestion data={data} />
       <SmarterQuestion data={data} />
+      <CollegeQuestion data={data} />
     </div>
   )
 }
@@ -138,6 +139,32 @@ function SmarterQuestion({ data }: { data: Dataset }) {
       </svg>
       {tip}
       <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>Spearman rank correlation between draft order and career AV within each class (1 = perfectly ordered). Hollow points: careers still young.</p>
+    </Question>
+  )
+}
+
+function CollegeQuestion({ data }: { data: Dataset }) {
+  const [grp, setGrp] = useState<Group>('QB')
+  const groups = GROUPS.filter(g => g !== 'OL' && g !== 'ST')
+  const pool = data.players.filter(p => p.grp === grp && p.pick > 0 && !p.young && p.cpct != null)
+  const tiers = [['Bottom quarter', 0, 0.25], ['Second', 0.25, 0.5], ['Third', 0.5, 0.75], ['Top quarter', 0.75, 1.01]] as const
+  const bars = tiers.map(([label, lo, hi]) => {
+    const xs = pool.filter(p => p.cpct! >= lo && p.cpct! < hi)
+    return { label, value: Math.round((100 * xs.filter(p => p.pct >= 50).length) / Math.max(xs.length, 1)), n: xs.length }
+  })
+  const spread = bars[3].value - bars[0].value
+  return (
+    <Question n="04" q="Does college production predict an NFL career?"
+      answer={<>{Math.abs(spread) < 8 ? 'Barely.' : spread > 0 ? 'Yes, even after the draft prices it in.' : 'No. If anything, the opposite.'}{' '}
+        Among drafted {GROUP_NAME[grp].toLowerCase()}, <span className="num">{bars[3].value}%</span> of the most productive college players beat their draft slot,
+        against <span className="num">{bars[0].value}%</span> of the least productive.</>}>
+      <div className="controls"><Chips value={grp} onChange={setGrp} label="Position" options={groups} /></div>
+      <Bars bars={bars} unit="% who beat their draft slot, by college production" suffix="%" />
+      <p className="meta" style={{ marginTop: 12 }}>
+        {pool.length.toLocaleString()} drafted players with linked college stats (classes through {data.model.lastJudgedClass}). Production is the
+        player’s career college output against every NFL player at the position; defense counts only {data.coverage.college.defenseFrom}+ college seasons.
+        Because the draft slot already reflects college production, this asks whether teams under- or over-value it.
+      </p>
     </Question>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  accolades, ALL_ARCHETYPES, gap, isExtreme, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
+  accolades, ALL_ARCHETYPES, gap, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
   shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season,
 } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
@@ -11,7 +11,8 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
   const [seasons, setSeasons] = useState<Season[] | null>(null)
   const similar = useMemo(() => (p ? samePath(p, data.players, 8, scope === 'pos') : []), [p, data, scope])
   const peers = useMemo(() => (p ? peersOf(p, data) : []), [p, data])
-  useEffect(() => { if (p) loadSeasons(p, data).then(setSeasons) }, [p, data])
+  const [college, setCollege] = useState<Season[] | null>(null)
+  useEffect(() => { if (p) { loadSeasons(p, data).then(setSeasons); loadCollege(p, data).then(setCollege) } }, [p, data])
 
   if (!p) {
     return (
@@ -102,11 +103,14 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
             main={p.from === 'recruit' ? `${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}` : '—'}
             sub={p.from === 'recruit' ? `247 composite ${p.rating.toFixed(4)}` : 'Recruiting rating not linked yet'} />
           <Stage n="02" title="College" main={p.college || '—'}
-            sub={p.from === 'recruit' && p.spct != null
-              ? `Draft outcome beat ${Math.round(p.spct * 100)}% of same-star recruits`
+            sub={p.cpct != null
+              ? `College production beat ${Math.round(p.cpct * 100)}% of NFL ${GROUP_NAME[p.grp].toLowerCase()}`
               : collegeLine(p, data)} />
           <Stage n="03" title="Draft" main={p.pick ? `#${p.pick}` : 'UDFA'}
-            sub={p.pick ? `${ordinal(p.round)} round · ${p.team} · ${p.year}` : `Signed after the ${p.year} draft`} />
+            sub={[
+              p.pick ? `${ordinal(p.round)} round · ${p.team} · ${p.year}` : `Signed after the ${p.year} draft`,
+              p.from === 'recruit' && p.spct != null ? `ahead of ${Math.round(p.spct * 100)}% of ${p.stars}★ recruits` : '',
+            ].filter(Boolean).join(' · ')} />
           <Stage n="04" title={p.young ? 'NFL so far' : 'NFL career'} main={`${p.av} AV${p.est ? '*' : ''}`}
             sub={[
               p.seasons ? `${p.seasons} season${p.seasons > 1 ? 's' : ''}` : 'no games',
@@ -117,6 +121,22 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         <p className="mono faint" style={{ fontSize: 12, marginTop: 20 }}>
           {p.line} · {p.games} games
           {!p.honors && ' · Pro Bowl and All-Pro honors aren’t in the source data for undrafted players yet'}
+        </p>
+      </section>
+
+      {/* College */}
+      <section className="section">
+        <h2 className="h3" style={{ marginBottom: 24 }}>College <span className="muted" style={{ fontWeight: 400 }}>· {p.college || 'season stats'}</span></h2>
+        {college === null ? <p className="faint mono" style={{ fontSize: 12 }}>loading…</p>
+          : college.length && COLLEGE_COLS[p.grp].length ? <CollegeTable grp={p.grp} rows={college} data={data} />
+            : <p className="muted">{p.grp === 'OL'
+              ? 'The source has no individual stats for offensive linemen.'
+              : p.year - 1 < data.coverage.college.offenseFrom
+                ? `College stats in the source start around ${data.coverage.college.offenseFrom}, after this player’s college years.`
+                : 'No college stats linked for this player.'}</p>}
+        <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>
+          Regular-season stats from CollegeFootballData.com. Defensive tackles, TFL, sacks and hurries start in {data.coverage.college.defenseFrom};
+          earlier seasons show —. Production percentile compares career college totals with every NFL player at the same position who has college stats.
         </p>
       </section>
 
@@ -232,7 +252,7 @@ const L: Record<string, [string, string]> = {
   solo: ['Solo', 'Solo tackles'], ast: ['Ast', 'Assisted tackles'], tfl: ['TFL', 'Tackles for loss'],
   sk: ['Sacks', 'Sacks'], qbh: ['QB hits', 'Quarterback hits'], stuff: ['Stuffs', 'Tackles on runs for no gain or a loss'],
   rstop: ['Run stops', 'Tackles on runs the offense failed (under 40%/60%/100% of the needed yards on 1st/2nd/3rd–4th down)'],
-  dint: ['Int', 'Interceptions'], pd: ['PD', 'Passes defended'], ff: ['FF', 'Forced fumbles'], fr: ['FR', 'Fumble recoveries'],
+  dint: ['Int', 'Interceptions'], tot: ['Tkl', 'Total tackles'], hur: ['Hurries', 'QB hurries'], pd: ['PD', 'Passes defended'], ff: ['FF', 'Forced fumbles'], fr: ['FR', 'Fumble recoveries'],
   sfty: ['Sfty', 'Safeties'], dtd: ['Def TD', 'Defensive touchdowns'], fgm: ['FGM', 'Field goals made'], fga: ['FGA', 'Field goals attempted'],
   prss: ['Pressures', 'Pressures'], hrry: ['Hurries', 'QB hurries'], qbkd: ['Knockdowns', 'QB knockdowns'],
   mtkl: ['Missed tkl', 'Missed tackles'], bltz: ['Blitzes', 'Times blitzed'], tgta: ['Tgt allowed', 'Targets allowed in coverage'],
@@ -251,6 +271,27 @@ const COLS: Record<Group, { main: Col[]; adv: Col[] }> = {
   LB: { main: cols('g gs solo ast tfl sk qbh stuff rstop dint pd ff? fr? sfty? dtd?'), adv: cols('prss hrry mtkl bltz tgta cmpa ydsa tda') },
   DB: { main: cols('g gs solo ast dint pd stuff rstop tfl? sk? ff? fr? sfty? dtd? pry? kry? sttd?'), adv: cols('tgta cmpa ydsa tda mtkl bltz') },
   ST: { main: cols('g fgm fga'), adv: [] },
+}
+
+const COLLEGE_COLS: Record<Group, Col[]> = {
+  QB: cols('cmp att pyd ptd int car ryd rtd'),
+  RB: cols('car ryd rtd rec recyd rectd kry? pry?'),
+  WR: cols('rec recyd rectd car? ryd? kry? pry?'),
+  TE: cols('rec recyd rectd'),
+  OL: [],
+  DL: cols('tot solo tfl sk hur pd? dint? dtd?'),
+  LB: cols('tot solo tfl sk hur pd dint dtd?'),
+  DB: cols('tot solo dint pd tfl? sk? dtd? kry? pry?'),
+  ST: cols('fgm fga'),
+}
+const COLLEGE_DEFENSE = new Set(['tot', 'solo', 'tfl', 'sk', 'hur', 'pd', 'dtd'])
+
+function CollegeTable({ grp, rows, data }: { grp: Group; rows: Season[]; data: Dataset }) {
+  const total = (k: string) => rows.reduce((s, r) => s + Number(r[k] || 0), 0)
+  const shown = COLLEGE_COLS[grp].filter(([k]) => !k.endsWith('?') || total(k.slice(0, -1)) > 0)
+    .map(([k, a, b]) => [k.replace('?', ''), a, b] as Col)
+  const untracked = (k: string, r: Season) => COLLEGE_DEFENSE.has(k) && Number(r.season) < data.coverage.college.defenseFrom
+  return <StatGrid cols={shown} rows={rows} data={data} untrackedExtra={untracked} />
 }
 
 function teamCount(rows: Season[]) {
@@ -278,12 +319,15 @@ function SeasonTable({ grp, rows, data }: { grp: Group; rows: Season[]; data: Da
   )
 }
 
-function StatGrid({ cols, rows, data, advanced }: { cols: Col[]; rows: Season[]; data: Dataset; advanced?: boolean }) {
+function StatGrid({ cols, rows, data, advanced, untrackedExtra }: {
+  cols: Col[]; rows: Season[]; data: Dataset; advanced?: boolean; untrackedExtra?: (k: string, r: Season) => boolean
+}) {
   const { noTargets, noStarts } = data.coverage
   // Advanced stats for the season in progress may not be published yet.
   const advPending = (r: Season) => advanced && Number(r.season) === data.lastSeason && cols.every(([k]) => !Number(r[k]))
   const untracked = (k: string, r: Season) =>
-    (k === 'tgt' && noTargets.includes(Number(r.season))) || (k === 'gs' && noStarts.includes(Number(r.season))) || advPending(r)
+    (k === 'tgt' && noTargets.includes(Number(r.season))) || (k === 'gs' && noStarts.includes(Number(r.season))) || advPending(r) ||
+    !!untrackedExtra?.(k, r)
   const total = (k: string) => rows.reduce((s, r) => s + Number(r[k] || 0), 0)
   const f = (v: number) => (Number.isInteger(v) ? v.toLocaleString('en-US') : v.toFixed(1))
   return (

@@ -12,9 +12,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm run data
-      - name: Add recruiting ratings when a key is configured
+      - name: Add recruiting ratings and college stats (CollegeFootballData.com)
         if: env.CFBD_API_KEY != ''
-        run: npm run data:recruits
+        run: npm run data:cfbd
       - run: |
           git config user.name "outlier-bot"
           git config user.email "outlier-bot@users.noreply.github.com"

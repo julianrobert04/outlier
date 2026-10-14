@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "data": "node scripts/build-pbp.mjs && node scripts/build-data.mjs",
-    "data:recruits": "node scripts/fetch-recruits.mjs && node scripts/build-data.mjs --offline"
+    "data:cfbd": "node scripts/fetch-recruits.mjs && node scripts/fetch-college.mjs && node scripts/build-data.mjs --offline"
   },
   "dependencies": {
     "react": "^19.1.0",

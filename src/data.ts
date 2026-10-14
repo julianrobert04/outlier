@@ -37,6 +37,8 @@ export type Player = {
   stars: number
   rating: number
   spct: number | null // stars → draft percentile
+  cpct: number | null // college production percentile within position group
+  cseasons: number
 }
 
 export type Group = 'QB' | 'RB' | 'WR' | 'TE' | 'OL' | 'DL' | 'LB' | 'DB' | 'ST'
@@ -57,7 +59,9 @@ export type Dataset = {
     youngFrom: number; journeyWeights: { draft: number; career: number }; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]
-  coverage: { startsFrom: { depthCharts: number[]; snapCounts: number[] }; noStarts: number[]; noTargets: number[]; advancedFrom: number; runStatsFrom: number; college: boolean }
+  collegeCols: string[]
+  collegeLinked: number
+  coverage: { startsFrom: { depthCharts: number[]; snapCounts: number[] }; noStarts: number[]; noTargets: number[]; advancedFrom: number; runStatsFrom: number; college: { offenseFrom: number; defenseFrom: number } }
   players: Player[]
   byId: Map<string, Player>
 }
@@ -99,18 +103,21 @@ export const yearsIn = (p: Player, d: Dataset) => Math.max(d.lastSeason - p.year
 
 // Season-by-season careers live in shards; a player page loads one.
 export type Season = Record<string, number | string>
-const shardCache = new Map<number, Promise<Record<string, (number | string)[][]>>>()
+const shardCache = new Map<string, Promise<Record<string, (number | string)[][]>>>()
 export function shardOf(id: string, shards: number) {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
   return (h >>> 0) % shards
 }
-export async function loadSeasons(p: Player, d: Dataset): Promise<Season[]> {
+async function loadShard(dir: string, p: Player, d: Dataset, cols: string[]): Promise<Season[]> {
   const k = shardOf(p.id, d.model.shards)
-  if (!shardCache.has(k)) shardCache.set(k, fetch(`${import.meta.env.BASE_URL}data/careers/${k}.json`).then(r => r.json()))
-  const rows = (await shardCache.get(k)!)[p.id] ?? []
-  return rows.map(r => Object.fromEntries(d.seasonCols.map((c, i) => [c, r[i]])))
+  const key = `${dir}/${k}`
+  if (!shardCache.has(key)) shardCache.set(key, fetch(`${import.meta.env.BASE_URL}data/${dir}/${k}.json`).then(r => r.json()))
+  const rows = (await shardCache.get(key)!)[p.id] ?? []
+  return rows.map(r => Object.fromEntries(cols.map((c, i) => [c, r[i]])))
 }
+export const loadSeasons = (p: Player, d: Dataset) => loadShard('careers', p, d, d.seasonCols)
+export const loadCollege = (p: Player, d: Dataset) => (p.cseasons ? loadShard('college', p, d, d.collegeCols) : Promise.resolve([]))
 
 // Accolades for early careers: what a player has already done in a short window.
 export function accolades(p: Player): string[] {
