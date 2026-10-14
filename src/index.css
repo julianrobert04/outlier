@@ -309,3 +309,5 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .oi-rank { font-family: var(--mono); font-size: 13px; color: var(--ink-2); margin-top: 8px; }
 .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.seasons abbr { text-decoration: none; cursor: help; border-bottom: 1px dotted var(--ink-3); }
+.seasons th:first-child, .seasons td:first-child { position: sticky; left: 0; background: var(--paper); z-index: 1; box-shadow: 1px 0 0 var(--rule); }

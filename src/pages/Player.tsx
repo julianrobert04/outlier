@@ -126,7 +126,8 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
           GS = games started: first string on the weekly depth chart ({data.coverage.startsFrom.depthCharts[0]}–{data.coverage.startsFrom.depthCharts[data.coverage.startsFrom.depthCharts.length - 1]})
           or at least 50% of snaps ({data.coverage.startsFrom.snapCounts[0]}+). Before {data.coverage.startsFrom.snapCounts[0]}, games for players without
           box-score stats (mostly linemen) count only games they started. — means the source didn’t track it that season.
-          {data.lastSeason} is in progress. Stats from nflverse.
+          Stuffs and run stops are computed from play-by-play; hover a column header for its definition.
+          * {data.lastSeason} is in progress. Stats from nflverse and Pro Football Reference.
         </p>
       </section>
 
@@ -212,16 +213,40 @@ function Stage({ n, title, main, sub }: { n: string; title: string; main: string
   )
 }
 
-const COLS: Record<Group, [string, string][]> = {
-  QB: [['g', 'G'], ['gs', 'GS'], ['cmp', 'Cmp'], ['att', 'Att'], ['pyd', 'Pass yds'], ['ptd', 'TD'], ['int', 'Int'], ['ryd', 'Rush yds'], ['rtd', 'Rush TD']],
-  RB: [['g', 'G'], ['gs', 'GS'], ['car', 'Car'], ['ryd', 'Rush yds'], ['rtd', 'TD'], ['rec', 'Rec'], ['recyd', 'Rec yds'], ['rectd', 'Rec TD']],
-  WR: [['g', 'G'], ['gs', 'GS'], ['tgt', 'Tgt'], ['rec', 'Rec'], ['recyd', 'Yds'], ['rectd', 'TD'], ['ryd', 'Rush yds']],
-  TE: [['g', 'G'], ['gs', 'GS'], ['tgt', 'Tgt'], ['rec', 'Rec'], ['recyd', 'Yds'], ['rectd', 'TD']],
-  OL: [['g', 'G'], ['gs', 'GS']],
-  DL: [['g', 'G'], ['gs', 'GS'], ['solo', 'Solo'], ['ast', 'Ast'], ['tfl', 'TFL'], ['sk', 'Sacks'], ['qbh', 'QB hits'], ['ff', 'FF']],
-  LB: [['g', 'G'], ['gs', 'GS'], ['solo', 'Solo'], ['ast', 'Ast'], ['tfl', 'TFL'], ['sk', 'Sacks'], ['dint', 'Int'], ['pd', 'PD']],
-  DB: [['g', 'G'], ['gs', 'GS'], ['solo', 'Solo'], ['ast', 'Ast'], ['dint', 'Int'], ['pd', 'PD'], ['ff', 'FF']],
-  ST: [['g', 'G'], ['fgm', 'FGM'], ['fga', 'FGA']],
+// Season-table columns. [key, header, full name]; a trailing "?" in the key marks
+// an optional column, shown only when the player has a non-zero career total.
+type Col = [string, string, string]
+const L: Record<string, [string, string]> = {
+  g: ['G', 'Games'], gs: ['GS', 'Games started'], cmp: ['Cmp', 'Completions'], att: ['Att', 'Pass attempts'],
+  pyd: ['Pass yds', 'Passing yards'], ptd: ['TD', 'Passing touchdowns'], int: ['Int', 'Interceptions thrown'],
+  skd: ['Sacked', 'Times sacked'], pfd: ['1st D', 'Passing first downs'], car: ['Car', 'Carries'],
+  ryd: ['Rush yds', 'Rushing yards'], rtd: ['Rush TD', 'Rushing touchdowns'], rfd: ['1st D', 'Rushing first downs'],
+  rec: ['Rec', 'Receptions'], tgt: ['Tgt', 'Targets'], recyd: ['Rec yds', 'Receiving yards'],
+  rectd: ['Rec TD', 'Receiving touchdowns'], yac: ['YAC', 'Yards after catch'], recfd: ['1st D', 'Receiving first downs'],
+  fuml: ['Fum lost', 'Fumbles lost'], pry: ['PR yds', 'Punt return yards'], kry: ['KR yds', 'Kick return yards'],
+  sttd: ['ST TD', 'Special-teams touchdowns'], pen: ['Pen', 'Penalties'],
+  solo: ['Solo', 'Solo tackles'], ast: ['Ast', 'Assisted tackles'], tfl: ['TFL', 'Tackles for loss'],
+  sk: ['Sacks', 'Sacks'], qbh: ['QB hits', 'Quarterback hits'], stuff: ['Stuffs', 'Tackles on runs for no gain or a loss'],
+  rstop: ['Run stops', 'Tackles on runs the offense failed (under 40%/60%/100% of the needed yards on 1st/2nd/3rd–4th down)'],
+  dint: ['Int', 'Interceptions'], pd: ['PD', 'Passes defended'], ff: ['FF', 'Forced fumbles'], fr: ['FR', 'Fumble recoveries'],
+  sfty: ['Sfty', 'Safeties'], dtd: ['Def TD', 'Defensive touchdowns'], fgm: ['FGM', 'Field goals made'], fga: ['FGA', 'Field goals attempted'],
+  prss: ['Pressures', 'Pressures'], hrry: ['Hurries', 'QB hurries'], qbkd: ['Knockdowns', 'QB knockdowns'],
+  mtkl: ['Missed tkl', 'Missed tackles'], bltz: ['Blitzes', 'Times blitzed'], tgta: ['Tgt allowed', 'Targets allowed in coverage'],
+  cmpa: ['Cmp allowed', 'Completions allowed'], ydsa: ['Yds allowed', 'Yards allowed in coverage'], tda: ['TD allowed', 'Touchdowns allowed'],
+  ybc: ['Yds before contact', 'Rushing yards before contact'], brk: ['Broken tkl', 'Broken tackles'], drop: ['Drops', 'Dropped passes'],
+  prsd: ['Pressured', 'Times pressured'], badt: ['Bad throws', 'Bad throws'],
+}
+const cols = (keys: string) => keys.split(' ').map(k => [k, ...L[k.replace('?', '')]] as Col)
+const COLS: Record<Group, { main: Col[]; adv: Col[] }> = {
+  QB: { main: cols('g gs cmp att pyd ptd int skd pfd ryd rtd fuml?'), adv: cols('prsd badt') },
+  RB: { main: cols('g gs car ryd rtd rfd rec recyd rectd fuml? pry? kry? sttd?'), adv: cols('ybc brk') },
+  WR: { main: cols('g gs tgt rec recyd rectd yac recfd ryd? fuml? pry? kry? sttd?'), adv: cols('drop brk') },
+  TE: { main: cols('g gs tgt rec recyd rectd yac recfd fuml?'), adv: cols('drop brk') },
+  OL: { main: cols('g gs pen?'), adv: [] },
+  DL: { main: cols('g gs solo ast tfl sk qbh stuff rstop ff? fr? dint? pd? sfty? dtd?'), adv: cols('prss hrry qbkd mtkl') },
+  LB: { main: cols('g gs solo ast tfl sk qbh stuff rstop dint pd ff? fr? sfty? dtd?'), adv: cols('prss hrry mtkl bltz tgta cmpa ydsa tda') },
+  DB: { main: cols('g gs solo ast dint pd stuff rstop tfl? sk? ff? fr? sfty? dtd? pry? kry? sttd?'), adv: cols('tgta cmpa ydsa tda mtkl bltz') },
+  ST: { main: cols('g fgm fga'), adv: [] },
 }
 
 function teamCount(rows: Season[]) {
@@ -230,21 +255,48 @@ function teamCount(rows: Season[]) {
 }
 
 function SeasonTable({ grp, rows, data }: { grp: Group; rows: Season[]; data: Dataset }) {
-  const untracked = (k: string, season: number) =>
-    (k === 'tgt' && data.coverage.noTargets.includes(season)) || (k === 'gs' && data.coverage.noStarts.includes(season))
-  const cols = COLS[grp]
+  const { advancedFrom } = data.coverage
+  const advRows = rows.filter(r => Number(r.season) >= advancedFrom)
+  const total = (rs: Season[], k: string) => rs.reduce((s, r) => s + Number(r[k] || 0), 0)
+  const pick = (cs: Col[], rs: Season[]) => cs.filter(([k]) => !k.endsWith('?') || total(rs, k.slice(0, -1)) > 0).map(([k, a, b]) => [k.replace('?', ''), a, b] as Col)
+  const main = pick(COLS[grp].main, rows)
+  const adv = advRows.length ? pick(COLS[grp].adv, advRows) : []
+  return (
+    <>
+      <StatGrid cols={main} rows={rows} data={data} />
+      {adv.length > 0 && (
+        <>
+          <h3 className="h3" style={{ margin: '40px 0 16px' }}>Advanced <span className="muted" style={{ fontWeight: 400 }}>· {advancedFrom} on</span></h3>
+          <StatGrid cols={adv} rows={advRows} data={data} advanced />
+        </>
+      )}
+    </>
+  )
+}
+
+function StatGrid({ cols, rows, data, advanced }: { cols: Col[]; rows: Season[]; data: Dataset; advanced?: boolean }) {
+  const { noTargets, noStarts } = data.coverage
+  // Advanced stats for the season in progress may not be published yet.
+  const advPending = (r: Season) => advanced && Number(r.season) === data.lastSeason && cols.every(([k]) => !Number(r[k]))
+  const untracked = (k: string, r: Season) =>
+    (k === 'tgt' && noTargets.includes(Number(r.season))) || (k === 'gs' && noStarts.includes(Number(r.season))) || advPending(r)
   const total = (k: string) => rows.reduce((s, r) => s + Number(r[k] || 0), 0)
   const f = (v: number) => (Number.isInteger(v) ? v.toLocaleString('en-US') : v.toFixed(1))
   return (
     <div style={{ overflowX: 'auto' }}>
       <table className="rows seasons">
-        <thead><tr><th>Season</th><th>Team</th>{cols.map(([k, l]) => <th key={k} className="r">{l}</th>)}</tr></thead>
+        <thead>
+          <tr>
+            <th>Season</th><th>Team</th>
+            {cols.map(([k, l, full]) => <th key={k} className="r"><abbr title={full}>{l}</abbr></th>)}
+          </tr>
+        </thead>
         <tbody>
           {rows.map(r => (
             <tr key={String(r.season)}>
               <td className="num">{r.season}{Number(r.season) === data.lastSeason ? <span className="faint">*</span> : null}</td>
               <td className="mono">{r.team}</td>
-              {cols.map(([k]) => <td key={k} className="r num">{untracked(k, Number(r.season)) ? '—' : f(Number(r[k] || 0))}</td>)}
+              {cols.map(([k]) => <td key={k} className="r num">{untracked(k, r) ? '—' : f(Number(r[k] || 0))}</td>)}
             </tr>
           ))}
           <tr className="total">

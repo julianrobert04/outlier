@@ -10,6 +10,8 @@
 //   depth_charts  — weekly starters, 2001–2024 (used where snap counts are missing)
 //   snap_counts   — snaps per game, 2013 onward (the published 2012 file is empty)
 //   nfldata games — the schedule, so depth-chart bye weeks don't count as starts
+//   pfr_advstats  — pressures, missed tackles, coverage, drops… (2018+)
+//   pbp_def.json  — stuffs and run stops derived from play-by-play (scripts/build-pbp.mjs)
 //
 // Every number on the site is derived here. Nothing is hand-entered.
 
@@ -68,13 +70,14 @@ function sources() {
     ...range(FIRST_CLASS, LAST_SEASON).map(y => [`stats_player/stats_player_reg_${y}.csv`, `stats/${y}.csv`]),
     ...range(2001, 2024).map(y => [`depth_charts/depth_charts_${y}.csv`, `depth/${y}.csv`]),
     ...range(2012, LAST_SEASON).map(y => [`snap_counts/snap_counts_${y}.csv`, `snaps/${y}.csv`]),
+    ...['def', 'rush', 'rec', 'pass'].map(t => [`pfr_advstats/advstats_season_${t}.csv`, `adv/${t}.csv`]),
   ]
 }
 
 const SCHEDULE_URL = 'https://github.com/nflverse/nfldata/raw/master/data/games.csv'
 
 async function download() {
-  for (const d of ['stats', 'depth', 'snaps']) await mkdir(`${RAW}/${d}`, { recursive: true })
+  for (const d of ['stats', 'depth', 'snaps', 'adv']) await mkdir(`${RAW}/${d}`, { recursive: true })
   const sched = await fetch(SCHEDULE_URL)
   if (!sched.ok) throw new Error(`schedule: HTTP ${sched.status}`)
   await writeFile(`${RAW}/games.csv`, await sched.text())
@@ -97,13 +100,32 @@ const fmt = n => Math.round(n).toLocaleString('en-US')
 
 // Columns of a season row, shared with the frontend.
 const SEASON_COLS = ['season', 'team', 'g', 'gs', 'cmp', 'att', 'pyd', 'ptd', 'int', 'car', 'ryd', 'rtd',
-  'rec', 'tgt', 'recyd', 'rectd', 'solo', 'ast', 'tfl', 'sk', 'qbh', 'dint', 'pd', 'ff', 'fgm', 'fga']
+  'rec', 'tgt', 'recyd', 'rectd', 'solo', 'ast', 'tfl', 'sk', 'qbh', 'dint', 'pd', 'ff', 'fgm', 'fga',
+  // more box-score stats
+  'pfd', 'rfd', 'recfd', 'yac', 'fuml', 'skd', 'sfty', 'fr', 'dtd', 'pry', 'kry', 'sttd', 'pen',
+  // derived from play-by-play (2000+)
+  'stuff', 'rstop', 'rtkl',
+  // Pro Football Reference advanced stats (2018+)
+  'prss', 'hrry', 'qbkd', 'mtkl', 'bltz', 'tgta', 'cmpa', 'ydsa', 'tda', 'ybc', 'brk', 'drop', 'prsd', 'badt']
+const ADV_FROM = 2018
 const STAT_MAP = {
   cmp: 'completions', att: 'attempts', pyd: 'passing_yards', ptd: 'passing_tds', int: 'passing_interceptions',
   car: 'carries', ryd: 'rushing_yards', rtd: 'rushing_tds', rec: 'receptions', tgt: 'targets',
   recyd: 'receiving_yards', rectd: 'receiving_tds', solo: 'def_tackles_solo', ast: 'def_tackle_assists',
   tfl: 'def_tackles_for_loss', sk: 'def_sacks', qbh: 'def_qb_hits', dint: 'def_interceptions',
   pd: 'def_pass_defended', ff: 'def_fumbles_forced', fgm: 'fg_made', fga: 'fg_att',
+  pfd: 'passing_first_downs', rfd: 'rushing_first_downs', recfd: 'receiving_first_downs',
+  yac: 'receiving_yards_after_catch', fuml: 'fumbles_lost_total', skd: 'sacks_suffered',
+  sfty: 'def_safeties', fr: 'fumble_recovery_opp', dtd: 'def_tds', pry: 'punt_return_yards',
+  kry: 'kickoff_return_yards', sttd: 'special_teams_tds', pen: 'penalties',
+}
+const EXTRA = ['stuff', 'rstop', 'rtkl', 'prss', 'hrry', 'qbkd', 'mtkl', 'bltz', 'tgta', 'cmpa', 'ydsa', 'tda', 'ybc', 'brk', 'drop', 'prsd', 'badt']
+// Advanced-stat source columns, per file. brk is broken tackles as a runner or receiver.
+const ADV_MAP = {
+  def: { prss: 'prss', hrry: 'hrry', qbkd: 'qbkd', mtkl: 'm_tkl', bltz: 'bltz', tgta: 'tgt', cmpa: 'cmp', ydsa: 'yds', tda: 'td' },
+  rush: { ybc: 'ybc', brk: 'brk_tkl' },
+  rec: { brk: 'brk_tkl', drop: 'drop' },
+  pass: { prsd: 'times_pressured', badt: 'bad_throws' },
 }
 
 async function buildSeasons(pfrToGsis) {
@@ -111,7 +133,7 @@ async function buildSeasons(pfrToGsis) {
   const row = (id, y) => {
     if (!seasons.has(id)) seasons.set(id, new Map())
     const m = seasons.get(id)
-    if (!m.has(y)) m.set(y, { season: y, team: '', g: 0, gs: 0, snapG: 0, snapGS: 0, depthGS: new Set(), ...Object.fromEntries(Object.keys(STAT_MAP).map(k => [k, 0])) })
+    if (!m.has(y)) m.set(y, { season: y, team: '', g: 0, gs: 0, snapG: 0, snapGS: 0, depthGS: new Set(), ...Object.fromEntries([...Object.keys(STAT_MAP), ...EXTRA].map(k => [k, 0])) })
     return m.get(y)
   }
   for (const y of range(FIRST_CLASS, LAST_SEASON)) {
@@ -150,6 +172,28 @@ async function buildSeasons(pfrToGsis) {
       if (num(r.offense_snaps) + num(r.defense_snaps) + num(r.st_snaps) > 0) s.snapG++
       if (num(r.offense_pct) >= 0.5 || num(r.defense_pct) >= 0.5) s.snapGS++
       if (!s.team) s.team = r.team
+    }
+  }
+  // Stuffs and run stops from play-by-play (scripts/build-pbp.mjs).
+  if (existsSync(`${RAW}/pbp_def.json`)) {
+    for (const [key, [stuff, rstop, rtkl]] of Object.entries(JSON.parse(await readFile(`${RAW}/pbp_def.json`, 'utf8')))) {
+      const [id, y] = key.split('|')
+      if (!seasons.get(id)?.has(Number(y))) continue // only seasons the player actually appears in
+      Object.assign(seasons.get(id).get(Number(y)), { stuff, rstop, rtkl })
+    }
+  }
+  // Advanced stats, 2018+, keyed by PFR id. A traded player has a combined
+  // "2TM"/"3TM" row plus one row per team: use the combined row alone.
+  for (const [file, cols] of Object.entries(ADV_MAP)) {
+    const rows = await load(`adv/${file}.csv`)
+    const team = r => r.tm ?? r.team ?? ''
+    const combined = new Set(rows.filter(r => /^\dTM$/.test(team(r))).map(r => `${r.pfr_id}|${r.season}`))
+    for (const r of rows) {
+      if (combined.has(`${r.pfr_id}|${r.season}`) && !/^\dTM$/.test(team(r))) continue
+      const id = pfrToGsis.get(r.pfr_id), y = num(r.season)
+      if (!id || y < ADV_FROM || !seasons.get(id)?.has(y)) continue
+      const s = seasons.get(id).get(y)
+      for (const [k, col] of Object.entries(cols)) s[k] += num(r[col])
     }
   }
   for (const m of seasons.values()) {
@@ -507,6 +551,8 @@ async function main() {
       startsFrom: { depthCharts: range(2001, 2024).filter(y => !snapSeasons.has(y)), snapCounts: [...snapSeasons].sort() },
       noStarts: [2000],
       noTargets: range(2003, 2008),
+      advancedFrom: ADV_FROM,
+      runStatsFrom: FIRST_CLASS,
       college: false,
     },
     recruitingLinked: recruited,

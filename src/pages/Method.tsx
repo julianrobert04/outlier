@@ -46,7 +46,14 @@ export default function MethodPage({ data }: { data: Dataset }) {
       <Block t="Season stats">
         <p>
           Season-by-season tables use nflverse regular-season stats. <strong>Games started</strong> means first string on the weekly depth chart
-          (2001–2011) or at least 50% of offensive or defensive snaps (2012+). College stats will be added with the recruiting data.
+          (2001–2012, counting only weeks the team played) or at least 50% of offensive or defensive snaps (2013+).
+        </p>
+        <p>
+          <strong>Stuffs</strong> and <strong>run stops</strong> are computed from every regular-season running play since {data.model.firstClass}.
+          A stuff is a tackle on a run that gained nothing or lost yards. A run stop is a tackle on a run the offense failed:
+          under 40% of the needed yards on 1st down, under 60% on 2nd, short of the line to gain on 3rd or 4th. Every tackler on the play
+          gets credit. Pressures, hurries, missed tackles, coverage allowed, broken tackles, yards before contact and drops come from
+          Pro Football Reference’s advanced stats, which start in {data.coverage.advancedFrom}. College stats will be added with the recruiting data.
         </p>
       </Block>
 
