@@ -6,6 +6,7 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     permissions: { contents: write }
+    env: { CFBD_API_KEY: '${{ secrets.CFBD_API_KEY }}' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -13,7 +14,6 @@ jobs:
       - run: npm run data
       - name: Add recruiting ratings when a key is configured
         if: env.CFBD_API_KEY != ''
-        env: { CFBD_API_KEY: '${{ secrets.CFBD_API_KEY }}' }
         run: npm run data:recruits
       - run: |
           git config user.name "outlier-bot"
