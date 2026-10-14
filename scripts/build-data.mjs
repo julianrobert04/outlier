@@ -401,6 +401,28 @@ const journey = (stage1, stage2) => {
   const c = x => Math.min(0.99, Math.max(0.01, x))
   return Math.exp(JOURNEY_WEIGHTS.draft * Math.log(c(stage1)) + JOURNEY_WEIGHTS.career * Math.log(c(stage2)))
 }
+// Stage 2, draft → career: how far the player beat expectation (actual AV minus
+// expected), ranked against EVERY player at the position since FIRST_CLASS,
+// drafted or not. Ranking against the whole position, not just the handful
+// picked near the same slot, is what keeps .99 rare: it takes one of the
+// biggest gaps of the era, not merely the best of a small group.
+// Early-career players are ranked among themselves on gap per season.
+function stageTwo(players) {
+  const pools = new Map()
+  for (const p of players) {
+    const k = `${p.grp}|${p.young ? 'young' : 'judged'}`
+    pools.set(k, [...(pools.get(k) ?? []), p])
+  }
+  for (const pool of pools.values()) {
+    const v = p => (p.young ? (p.av - p.exp) / yearsIn(p) : p.av - p.exp)
+    const vals = pool.map(v)
+    pool.forEach((p, i) => { p.gpct = midRank(vals[i], vals) })
+  }
+}
+// An early read can't reach the top of the scale until the career has run.
+const EARLY_CAP = 0.95
+// The final grade rounds down: .99 means the top 1%, never "rounded up to it".
+const gradeOI = x => Math.min(0.99, Math.max(0.01, Math.floor(x * 100 + 1e-9) / 100))
 const clampOI = x => Math.min(0.99, Math.max(0.01, Math.round(x * 100) / 100))
 const normName = s => s.toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '')
 const normSchool = s => s.toLowerCase().replace(/\bst\.?$/, 'state').replace(/[^a-z]/g, '')
@@ -413,7 +435,7 @@ function midRank(value, values) {
 
 async function outlierIndex(players) {
   for (const p of players) {
-    p.oi = clampOI(p.pct / 100); p.from = p.pick ? 'draft' : 'udfa'; p.stars = 0; p.rating = 0; p.spct = null
+    p.oi = gradeOI(p.gpct); p.from = p.pick ? 'draft' : 'udfa'; p.stars = 0; p.rating = 0; p.spct = null
   }
   if (!existsSync(`${RAW}/recruits.json`)) return 0
   const recruits = JSON.parse(await readFile(`${RAW}/recruits.json`, 'utf8'))
@@ -444,7 +466,7 @@ async function outlierIndex(players) {
       (young || q.year <= lastJudged) && (!r.grp || q.grp === r.grp))
     if (cohort.length < 30) continue
     p.spct = clampOI(midRank(draftValue(r), cohort.map(draftValue)))
-    p.oi = clampOI(journey(p.spct, p.pct / 100))
+    p.oi = gradeOI(journey(p.spct, p.gpct))
     p.from = 'recruit'; p.stars = r.stars; p.rating = Math.round(r.rating * 10000) / 10000
   }
   return linked
@@ -600,7 +622,9 @@ async function main() {
     cls.forEach((p, i) => { p.classRank = i + 1 })
     for (const g of byGroup.keys()) cls.filter(p => p.grp === g).forEach((p, i) => { p.posRank = i + 1 })
   }
+  stageTwo(players)
   const recruited = await outlierIndex(players)
+  for (const p of players) if (p.young) p.oi = Math.min(p.oi, EARLY_CAP)
   const collegeLinked = await linkCollege(players)
   for (const p of players) { p.cpct ??= null; p.cseasons = p.collegeRows?.length ?? 0 }
 
@@ -623,9 +647,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'oi', 'rank', 'of', 'from', 'stars', 'rating', 'spct', 'cpct', 'cseasons']
+    'oi', 'gpct', 'rank', 'of', 'from', 'stars', 'rating', 'spct', 'cpct', 'cseasons']
   // spct stays null when there is no recruiting link: null means "unknown", never 0%.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'spct' || f === 'cpct' ? v ?? null : v ?? 0)
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'gpct' ? Math.round(v * 1000) / 1000 : f === 'spct' || f === 'cpct' ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({
@@ -634,7 +658,7 @@ async function main() {
     lastSeason: LAST_SEASON,
     model: {
       bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: FIRST_CLASS, lastClass: LAST_CLASS,
-      youngFrom: YOUNG_FROM, journeyWeights: JOURNEY_WEIGHTS, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
+      youngFrom: YOUNG_FROM, journeyWeights: JOURNEY_WEIGHTS, earlyCap: EARLY_CAP, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,

@@ -31,6 +31,7 @@ export type Player = {
   dna: string
   line: string
   oi: number // Outlier Index, .01–.99
+  gpct: number // stage 2: gap vs expectation, percentile within position (all eras)
   rank: number // place among core comparable players (1 = best)
   of: number
   from: 'recruit' | 'draft' | 'udfa' // the stage the index is measured from
@@ -56,7 +57,7 @@ export type Dataset = {
   recruitingLinked: number
   model: {
     bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; lastClass: number
-    youngFrom: number; journeyWeights: { draft: number; career: number }; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
+    youngFrom: number; journeyWeights: { draft: number; career: number }; earlyCap: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]
   collegeCols: string[]

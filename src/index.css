@@ -311,3 +311,25 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
 .seasons abbr { text-decoration: none; cursor: help; border-bottom: 1px dotted var(--ink-3); }
 .seasons th:first-child, .seasons td:first-child { position: sticky; left: 0; background: var(--paper); z-index: 1; box-shadow: 1px 0 0 var(--rule); }
+
+/* ── Formula ───────────────────────────────────────── */
+.explainer { display: grid; grid-template-columns: minmax(280px, 1fr) 2fr; gap: 48px; margin-top: 8px; }
+@media (max-width: 960px) { .explainer { grid-template-columns: 1fr; } }
+.rule-box { border-top: 2px solid var(--ink); padding-top: 16px; }
+.plain { list-style: none; padding: 0; margin-top: 20px; display: grid; gap: 12px; color: var(--ink-2); font-size: 14px; }
+.plain strong { color: var(--ink); font-weight: 600; }
+.examples { display: grid; gap: 0; }
+.example { border-top: 1px solid var(--rule); padding: 16px 0 20px; }
+.example .h3:hover { text-decoration: underline; text-underline-offset: 3px; }
+.equation { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; font-size: 18px; margin-top: 12px; }
+.equation sup { font-size: 11px; color: var(--ink-2); margin-left: 1px; }
+.equation .op { color: var(--ink-3); }
+.equation strong { font-size: 28px; letter-spacing: -0.03em; }
+.stages { list-style: none; padding: 0; display: grid; gap: 10px; margin-top: 12px; }
+.stages li { display: grid; grid-template-columns: 150px 56px 1fr; gap: 12px; align-items: baseline; font-size: 14px; }
+.stage-label { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.stage-value { font-weight: 700; font-size: 16px; }
+.stage-text { color: var(--ink-2); }
+@media (max-width: 640px) { .stages li { grid-template-columns: 1fr auto; } .stage-text { grid-column: 1 / -1; } }
+.rule-box .equation { font-family: var(--display); font-size: 16px; font-weight: 500; }
+.rule-box .equation strong { font-size: 18px; font-weight: 700; letter-spacing: 0; }

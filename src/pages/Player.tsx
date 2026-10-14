@@ -4,6 +4,7 @@ import {
   shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season,
 } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
+import { Equation, StageSentences } from '../Formula'
 
 export default function PlayerPage({ data, id }: { data: Dataset; id: string }) {
   const p = data.byId.get(id)
@@ -68,11 +69,7 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
             <strong style={{ color: 'var(--ink)' }}>Outlier Index{p.young ? ', early read' : ''}</strong>
             {isExtreme(p) && <> · career {rankLabel(p).toLowerCase().replace('no.', 'No.')} comparable players</>}
           </div>
-          <div className="meta" style={{ marginTop: 6 }}>
-            {p.from === 'recruit' && p.spct != null
-              ? <>{p.stars}★ → draft {oiLabel(p.spct)} · draft → {p.young ? 'so far' : 'career'} {oiLabel(Math.min(0.99, Math.max(0.01, p.pct / 100)))}</>
-              : <>draft → {p.young ? 'so far' : 'career'} {oiLabel(Math.min(0.99, Math.max(0.01, p.pct / 100)))} · no star rating linked</>}
-          </div>
+          <Equation p={p} data={data} />
           <p className="muted" style={{ marginTop: 20, maxWidth: '34ch' }}>{verdict(p)}</p>
           <div className="mono faint" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
             {p.young ? <>after {yrs.toFixed(1)} seasons · compared on pace with other 2022+ players</> : null}
@@ -93,6 +90,15 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
             {p.est ? ' Career value estimated from games, starts and stats (see Method).' : ''}
           </p>
         </div>
+      </section>
+
+      {/* How the grade was built */}
+      <section className="section">
+        <h2 className="h3" style={{ marginBottom: 16 }}>How {p.name.split(' ')[0]}’s grade is built</h2>
+        <StageSentences p={p} data={data} />
+        <p className="meta" style={{ marginTop: 16 }}>
+          Outlier Index = getting drafted<sup>{data.model.journeyWeights.draft}</sup> × NFL career<sup>{data.model.journeyWeights.career}</sup>. <a href="#/method" style={{ textDecoration: 'underline' }}>Full method →</a>
+        </p>
       </section>
 
       {/* Journey */}

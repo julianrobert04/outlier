@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { accolades, gap, GROUPS, oiLabel, rankLabel, shortPick, type Dataset, type Group, type Player } from '../data'
 import Scatter from '../Scatter'
+import { FormulaExplainer } from '../Formula'
 import { Chips, GapNum, OI, playerHref } from '../ui'
 
 const touch = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches
@@ -21,7 +22,7 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
     .sort((a, b) => b.oi - a.oi || b.av - a.av).slice(0, 6), [data, grp])
   // The over-performer exemplar: the most valuable undrafted career (Brady already
   // anchors the chart and the Beat-the-slot list).
-  const top = [...finished].filter(p => !p.pick).sort((a, b) => b.av - a.av)[0] ?? byGap[0]
+  const top = [...finished].filter(p => !p.pick).sort((a, b) => b.oi - a.oi || b.av - a.av)[0] ?? byGap[0]
   const bottom = under[0]
 
   return (
@@ -73,7 +74,8 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
               </p>
             </div>
           </div>
-          <div className="grid-2">
+          <FormulaExplainer data={data} ids={['KelcTr00', 'RussJa00', 'BradTo00']} />
+          <div className="grid-2" style={{ marginTop: 56 }}>
             <Extreme p={top} kind="over" />
             <Extreme p={bottom} kind="under" />
           </div>
