@@ -78,7 +78,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 2px; line-height: 1;
 }
 .mark i { width: 7px; height: 7px; border-radius: 50%; background: var(--over); display: inline-block; transform: translateY(-14px); }
-.nav { display: flex; gap: 24px; font-size: 13px; }
+.nav { display: flex; gap: 20px; font-size: 13px; }
 .nav a { white-space: nowrap; color: var(--ink-2); display: flex; gap: 6px; align-items: baseline; }
 .nav a span { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
 .nav a:hover, .nav a.on { color: var(--ink); }
@@ -237,7 +237,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @media (max-width: 720px) { .journey { grid-template-columns: 1fr 1fr; row-gap: 32px; } }
 
 /* ── Paths nav ─────────────────────────────────────── */
-.paths { display: flex; flex-direction: column; border-top: 1px solid var(--ink); align-self: start; position: sticky; top: 72px; }
+.paths { display: flex; flex-direction: column; align-self: start; position: sticky; top: 72px; }
 .paths a { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: 14px; color: var(--ink-2); }
 .paths a:hover { color: var(--ink); }
 .paths a.on { color: var(--ink); font-weight: 650; }
@@ -251,3 +251,35 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   .section[style*='grid-template-columns'] { grid-template-columns: 1fr !important; }
   .paths { position: static; }
 }
+
+/* ── Player page additions ─────────────────────────── */
+.verdict { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 48px; }
+@media (max-width: 860px) { .verdict { grid-template-columns: 1fr; } }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.badges span {
+  font-family: var(--mono); font-size: 11px; padding: 4px 10px; border: 1px solid var(--over); color: var(--over);
+}
+.badges span::before { content: '● '; }
+.seasons td, .seasons th { padding-right: 16px; white-space: nowrap; }
+.seasons td { padding-top: 8px; padding-bottom: 8px; }
+.seasons tr.total td { border-top: 1px solid var(--ink); border-bottom: 0; font-weight: 700; }
+.tag {
+  font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+  border: 1px solid var(--over); color: var(--over); padding: 1px 5px; margin-left: 8px; vertical-align: 2px;
+}
+
+/* ── Directory search ──────────────────────────────── */
+.bigsearch { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid var(--ink); padding: 8px 0 12px; }
+.bigsearch input {
+  flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); outline: none;
+  font: inherit; font-weight: 700; font-variation-settings: 'wdth' 75; font-size: clamp(24px, 4vw, 44px); letter-spacing: -0.01em;
+}
+.bigsearch input::placeholder { color: var(--ink-3); font-weight: 400; }
+.palette li.all a { color: var(--ink-2); font-size: 13px; border-top: 1px solid var(--rule); }
+
+.paths > div > a { display: flex; }
+.rising { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--rule); margin-bottom: 24px; }
+.rise { padding: 24px 24px 24px 0; border-bottom: 1px solid var(--rule); }
+.rise:hover .h3 { text-decoration: underline; text-underline-offset: 4px; }
+@media (max-width: 860px) { .rising { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .rising { grid-template-columns: 1fr; } }

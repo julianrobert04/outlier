@@ -12,19 +12,26 @@ export type Player = {
   exp: number
   pct: number
   peers: number
-  drav: number
+  est: number // 1 = career value estimated (undrafted)
+  honors: number // 1 = Pro Bowl / All-Pro / HOF data available
+  loyal: number // share of career value (or games) with first team
   pb: number
   ap: number
   hof: number
   starts: number
   games: number
+  gs1: number // starts as a rookie
+  played: number
   seasons: number
   to: number
   active: number
+  young: number // 1 = early-career track (2022+ classes)
+  classRank: number
+  posRank: number
   dna: string
   line: string
   oi: number // Outlier Index, .01–.99
-  from: 'recruit' | 'draft' // the stage the index is measured from
+  from: 'recruit' | 'draft' | 'udfa' // the stage the index is measured from
   stars: number
   rating: number
   spct: number | null // stars → draft percentile
@@ -43,7 +50,11 @@ export type Dataset = {
   source: string
   lastSeason: number
   recruitingLinked: number
-  model: { bandwidths: number[]; minPeers: number; lastJudgedClass: number }
+  model: {
+    bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; lastClass: number
+    youngFrom: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
+  }
+  seasonCols: string[]
   players: Player[]
   byId: Map<string, Player>
 }
@@ -74,9 +85,42 @@ export const ordinal = (n: number) => {
 
 export const oiLabel = (x: number) => x.toFixed(2).replace(/^0/, '')
 
-export const pickLabel = (p: Player) => `Rd ${p.round} · #${p.pick}`
+export const pickLabel = (p: Player) => (p.pick ? `Rd ${p.round} · #${p.pick}` : 'Undrafted')
+export const shortPick = (p: Player) => (p.pick ? `#${p.pick}` : 'UDFA')
+export const yearsIn = (p: Player, d: Dataset) => Math.max(d.lastSeason - p.year + d.model.seasonFraction, 0.5)
 
-export const ARCHETYPES: { name: string; rule: string; blurb: string }[] = [
+// Season-by-season careers live in shards; a player page loads one.
+export type Season = Record<string, number | string>
+const shardCache = new Map<number, Promise<Record<string, (number | string)[][]>>>()
+export function shardOf(id: string, shards: number) {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
+  return (h >>> 0) % shards
+}
+export async function loadSeasons(p: Player, d: Dataset): Promise<Season[]> {
+  const k = shardOf(p.id, d.model.shards)
+  if (!shardCache.has(k)) shardCache.set(k, fetch(`${import.meta.env.BASE_URL}data/careers/${k}.json`).then(r => r.json()))
+  const rows = (await shardCache.get(k)!)[p.id] ?? []
+  return rows.map(r => Object.fromEntries(d.seasonCols.map((c, i) => [c, r[i]])))
+}
+
+// Accolades for early careers: what a player has already done in a short window.
+export function accolades(p: Player): string[] {
+  const out: string[] = []
+  if (p.ap) out.push(p.ap > 1 ? `${p.ap}× All-Pro already` : 'All-Pro already')
+  if (p.pb) out.push(p.pb > 1 ? `${p.pb}× Pro Bowl already` : 'Pro Bowl already')
+  if (p.classRank === 1) out.push(`No. 1 career value in the ${p.year} class`)
+  else if (p.classRank <= 10) out.push(`Top 10 in the ${p.year} class`)
+  if (p.posRank === 1) out.push(`Best ${p.grp} of the ${p.year} class so far`)
+  else if (p.posRank <= 3) out.push(`Top 3 ${p.grp} of the ${p.year} class`)
+  if (p.gs1 >= 8) out.push('Day-one starter')
+  if ((p.pick >= 100 || !p.pick) && p.pct >= 90) out.push(p.pick ? 'Steal of the class' : 'Undrafted breakout')
+  return out
+}
+
+export type Archetype = { name: string; rule: string; blurb: string; track?: 'drafted' | 'udfa' | 'young' }
+
+export const ARCHETYPES: Archetype[] = [
   { name: 'Hall of Famer', rule: 'Inducted into the Pro Football Hall of Fame', blurb: 'Careers that ended in Canton.' },
   { name: 'Late-round legend', rule: 'Pick 100 or later, and 3+ Pro Bowls or a first-team All-Pro', blurb: 'Nobody saw it coming. They became stars anyway.' },
   { name: 'Blue-chip bust', rule: 'First-round pick who finished below 85% of comparable picks', blurb: 'Top of the board, bottom of the outcomes.' },
@@ -91,25 +135,46 @@ export const ARCHETYPES: { name: string; rule: string; blurb: string }[] = [
   { name: 'Fell short', rule: 'Below 30% of comparable picks', blurb: 'Less than the slot implied.' },
 ]
 
+export const UNDRAFTED_ARCHETYPES: Archetype[] = [
+  { name: 'Undrafted legend', rule: 'Undrafted, with 60+ career value', blurb: 'All 32 teams passed. They were wrong.', track: 'udfa' },
+  { name: 'Undrafted gem', rule: 'Undrafted, beat 90%+ of undrafted peers, 15+ career value', blurb: 'Signed after the draft, stuck around, mattered.', track: 'udfa' },
+  { name: 'Made the league', rule: 'Undrafted, 3+ seasons and 32+ games', blurb: 'Beat the odds just by lasting.', track: 'udfa' },
+  { name: 'Cup of coffee', rule: 'Undrafted, played at least one game', blurb: 'Got on the field, briefly.', track: 'udfa' },
+  { name: 'Never broke through', rule: 'Undrafted, never played a regular-season game', blurb: 'Reached a roster, never the field.', track: 'udfa' },
+]
+
+export const EARLY_ARCHETYPES: Archetype[] = [
+  { name: 'Early star', rule: '2022+ class with a Pro Bowl or All-Pro already', blurb: 'Arrived and announced it.', track: 'young' },
+  { name: 'Ahead of schedule', rule: '2022+ class, value pace beats 80%+ of comparable young players', blurb: 'Producing faster than their slot predicts.', track: 'young' },
+  { name: 'On schedule', rule: '2022+ class, pace between the 30th and 80th percentile', blurb: 'Developing about as expected.', track: 'young' },
+  { name: 'Slow start', rule: '2022+ class, pace below 30% of comparable young players', blurb: 'Behind the curve, for now.', track: 'young' },
+  { name: 'Still waiting', rule: '2022+ class, fewer than 4 games played', blurb: 'The story hasn’t started yet.', track: 'young' },
+]
+
+export const ALL_ARCHETYPES: Archetype[] = [
+  ...ARCHETYPES.map(a => ({ ...a, track: 'drafted' as const })), ...UNDRAFTED_ARCHETYPES, ...EARLY_ARCHETYPES,
+]
+
 // Career DNA — a small vector describing how a career unfolded, independent
 // of era: where they were picked, how they did vs peers, how long, how high
 // the peak, how often they started, and how much of it was for one team.
 function dna(p: Player): number[] {
   const yrs = Math.max(p.seasons, 1)
   return [
-    Math.log(p.pick) / Math.log(260),
+    Math.log(p.pick || 300) / Math.log(260),
     p.pct / 100 * 1.5,
     Math.min(p.seasons, 18) / 18,
     Math.min(p.pb + 2 * p.ap, 14) / 14,
     Math.min(p.starts / yrs, 1) * 0.7,
-    (p.av > 0 ? Math.min(p.drav / p.av, 1) : 0) * 0.5,
+    p.loyal * 0.5,
   ]
 }
 
 export function samePath(target: Player, all: Player[], n = 8, samePosition = true) {
   const t = dna(target)
   return all
-    .filter(p => p !== target && (!samePosition || p.grp === target.grp) && !p.active)
+    .filter(p => p !== target && (!samePosition || p.grp === target.grp) &&
+      (target.young ? p.young === 1 : !p.active && !p.young))
     .map(p => {
       const v = dna(p)
       return { p, d: Math.sqrt(v.reduce((s, x, i) => s + (x - t[i]) ** 2, 0)) }
@@ -118,12 +183,16 @@ export function samePath(target: Player, all: Player[], n = 8, samePosition = tr
     .slice(0, n)
 }
 
-// Approximate peer set for display: same group, same window, similar pick.
-export function peersOf(target: Player, all: Player[]) {
-  const w = Math.max(0, Math.min(3, Math.floor((2025 - target.year - 3) / 2)))
-  const lp = Math.log(target.pick)
-  return all.filter(p => p !== target && p.grp === target.grp &&
-    Math.abs(p.year - target.year) <= w && Math.abs(Math.log(p.pick) - lp) < 0.35)
+// Approximate peer set for display: same group and track, similar slot.
+// Young players' values are scaled to this player's time in the league.
+export function peersOf(target: Player, d: Dataset) {
+  const w = target.young ? 99 : Math.max(0, Math.min(3, Math.floor((d.model.lastJudgedClass - target.year) / 2)))
+  const lp = Math.log(target.pick || 1)
+  return d.players
+    .filter(p => p !== target && p.grp === target.grp && p.young === target.young &&
+      Math.abs(p.year - target.year) <= w &&
+      (target.pick ? p.pick > 0 && Math.abs(Math.log(p.pick) - lp) < 0.35 : !p.pick))
+    .map(p => ({ p, v: target.young ? (p.av / yearsIn(p, d)) * yearsIn(target, d) : p.av }))
 }
 
 export function era(y: number) {

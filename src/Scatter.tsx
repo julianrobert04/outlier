@@ -13,7 +13,10 @@ type Props = {
 const PICK_TICKS = [1, 5, 10, 32, 64, 100, 150, 250]
 const PAD = { l: 44, r: 16, t: 16, b: 36 }
 
-const defaultTone = (p: Player) => (p.oi >= 0.97 ? 'over' : p.oi <= 0.03 && p.round === 1 ? 'under' : null)
+// Highlight the true outliers. Among undrafted players nearly any real career
+// beats 97% of the group, so they also need a substantial career (40+ AV).
+const defaultTone = (p: Player) =>
+  p.pct >= 97 && (p.pick > 0 || p.av >= 40) ? 'over' : p.pct <= 3 && p.round === 1 ? 'under' : null
 
 function jitter(id: string) {
   let h = 0
@@ -47,11 +50,14 @@ export default function Scatter({ players, height = 460, labels = [], focus, ton
 
   const maxAv = useMemo(() => Math.max(60, ...players.map(p => p.av)), [players])
   const ymax = Math.ceil(maxAv / 50) * 50
-  const x = (pick: number) => PAD.l + (Math.log(pick) / Math.log(262)) * (w - PAD.l - PAD.r)
+  const hasUdfa = useMemo(() => players.some(p => !p.pick), [players])
+  const plotR = w - PAD.r - (hasUdfa ? Math.max(48, w * 0.07) : 0) // drafted area ends here
+  const x = (pick: number) => PAD.l + (Math.log(pick) / Math.log(262)) * (plotR - PAD.l)
+  const udfaX = (id: string) => plotR + 18 + (jitter(id) + 0.5) * (w - PAD.r - plotR - 22)
   const y = (av: number) => PAD.t + (1 - av / ymax) * (height - PAD.t - PAD.b)
 
   const pts = useMemo(
-    () => players.map(p => ({ p, x: x(Math.max(1, p.pick + jitter(p.id) * 0.8)), y: y(p.av), t: tone(p) })),
+    () => players.map(p => ({ p, x: p.pick ? x(Math.max(1, p.pick + jitter(p.id) * 0.8)) : udfaX(p.id), y: y(p.av), t: tone(p) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [players, w, height, ymax, tone],
   )
@@ -60,6 +66,7 @@ export default function Scatter({ players, height = 460, labels = [], focus, ton
   const curve = useMemo(() => {
     const sums = new Map<number, [number, number]>()
     for (const p of players) {
+      if (!p.pick) continue
       const b = Math.round(Math.log(p.pick) * 8)
       const s = sums.get(b) ?? [0, 0]
       sums.set(b, [s[0] + p.exp, s[1] + 1])
@@ -90,14 +97,21 @@ export default function Scatter({ players, height = 460, labels = [], focus, ton
       g.textAlign = 'right'; g.fillText(String(v), PAD.l - 8, y(v) + 3)
     }
     g.textAlign = 'center'
+    let lastTick = -Infinity
     for (const t of PICK_TICKS) {
-      if (x(t) > w - PAD.r) continue
+      if (x(t) > plotR || x(t) - lastTick < 30) continue
+      lastTick = x(t)
       g.fillText(t === 1 ? '#1' : String(t), x(t), height - PAD.b + 16)
+    }
+    if (hasUdfa) {
+      g.fillText('UDFA', (plotR + 18 + w - PAD.r) / 2, height - PAD.b + 16)
+      g.strokeStyle = col('--rule'); g.setLineDash([2, 3])
+      g.beginPath(); g.moveTo(plotR + 9.5, PAD.t); g.lineTo(plotR + 9.5, height - PAD.b); g.stroke(); g.setLineDash([])
     }
     g.textAlign = 'left'
     g.fillText('CAREER AV ↑', PAD.l, PAD.t - 4)
     g.textAlign = 'right'
-    g.fillText('DRAFT PICK (LOG) →', w - PAD.r, height - 6)
+    g.fillText('DRAFT PICK (LOG) →', plotR, height - 6)
 
     // dots: neutral first, then toned on top
     const r = w < 600 ? 1.6 : 2.2
@@ -114,10 +128,12 @@ export default function Scatter({ players, height = 460, labels = [], focus, ton
     g.lineJoin = 'round'
     g.strokeStyle = col('--paper'); g.lineWidth = 5; g.stroke()
     g.strokeStyle = col('--ink'); g.lineWidth = 2; g.stroke()
-    const last = curve[Math.floor(curve.length * 0.55)]
+    const last = curve[Math.floor(curve.length * 0.4)]
     if (last) {
       g.textAlign = 'left'; g.font = '500 11px "JetBrains Mono", monospace'
-      halo(g, 'what the slot predicts', x(last[0]) + 6, y(last[1]) - 12, col('--paper'), col('--ink'))
+      const label = 'what the slot predicts'
+      const lx = Math.min(x(last[0]) + 6, plotR - g.measureText(label).width - 4)
+      halo(g, label, lx, y(last[1]) - 14, col('--paper'), col('--ink'))
     }
 
     // labels: try right, then left; skip a label that would collide

@@ -13,7 +13,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
   const rows = useMemo(() => {
     const by = new Map<string, number[]>()
     for (const p of data.players) {
-      if (p.year < since || (grp !== 'ALL' && p.grp !== grp)) continue
+      if (p.young || !p.college || p.year < since || (grp !== 'ALL' && p.grp !== grp)) continue
       by.set(p.college, [...(by.get(p.college) ?? []), gap(p)])
     }
     return [...by.entries()]
@@ -30,7 +30,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
 
   const scale = Math.max(...rows.map(r => Math.max(Math.abs(r.lo), Math.abs(r.hi))), 1)
   const X = (v: number) => `${50 + (v / scale) * 50}%`
-  const focus = college ? data.players.filter(p => p.college === college && p.year >= since && (grp === 'ALL' || p.grp === grp)).sort((a, b) => gap(b) - gap(a)) : []
+  const focus = college ? data.players.filter(p => !p.young && p.college === college && p.year >= since && (grp === 'ALL' || p.grp === grp)).sort((a, b) => gap(b) - gap(a)) : []
 
   return (
     <div className="wrap" style={{ paddingTop: 56 }}>
@@ -38,7 +38,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
       <h1 className="h1" style={{ marginTop: 16 }}>Who sends players<br />who outplay the slot?</h1>
       <p className="lede" style={{ marginTop: 20 }}>
         Counting NFL players rewards schools that sign the most talent. This asks a fairer question:
-        once the draft has priced a player in, do that school’s alumni beat the price?
+        once the draft has priced a player in (or passed on him), do that school’s alumni beat the price?
       </p>
 
       <div className="section" style={{ marginTop: 48 }}>
@@ -93,9 +93,9 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
               {focus.map(p => (
                 <tr key={p.id} className="link" onClick={() => (location.hash = playerHref(p).slice(1))}>
                   <td><div className="name">{p.name}</div><div className="sub mono">{p.pos}</div></td>
-                  <td className="mono hide-s">{p.year} · #{p.pick}</td>
+                  <td className="mono hide-s">{p.year} · {p.pick ? `#${p.pick}` : 'UDFA'}</td>
                   <td className="r num hide-s faint">{p.exp.toFixed(1)}</td>
-                  <td className="r num hide-s">{p.av}</td>
+                  <td className="r num hide-s">{p.av}{p.est ? '*' : ''}</td>
                   <td className="r"><GapNum p={p} /></td>
                   <td className="r"><OI value={p.oi} /></td>
                 </tr>

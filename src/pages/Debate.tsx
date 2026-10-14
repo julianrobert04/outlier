@@ -63,7 +63,7 @@ const FULL_CAREER_CUTOFF = 2016 // classes with careers essentially complete
 
 function RoundsQuestion({ data }: { data: Dataset }) {
   const [grp, setGrp] = useState<Group | 'ALL'>('ALL')
-  const pool = useMemo(() => data.players.filter(p => p.year <= FULL_CAREER_CUTOFF && p.round <= 7 && (grp === 'ALL' || p.grp === grp)), [data, grp])
+  const pool = useMemo(() => data.players.filter(p => p.year <= FULL_CAREER_CUTOFF && p.round >= 1 && p.round <= 7 && (grp === 'ALL' || p.grp === grp)), [data, grp])
   const r1 = pool.filter(p => p.round === 1), r2 = pool.filter(p => p.round === 2)
   const m1 = median(r1.map(p => p.av))
   const share = r2.filter(p => p.av > m1).length / Math.max(r2.length, 1)
@@ -104,7 +104,7 @@ function SmarterQuestion({ data }: { data: Dataset }) {
   const series = useMemo(() => {
     const out: { year: number; rho: number }[] = []
     for (let y = 2000; y <= data.model.lastJudgedClass; y++) {
-      const c = data.players.filter((p: Player) => p.year === y)
+      const c = data.players.filter((p: Player) => p.year === y && p.pick > 0)
       if (c.length > 50) out.push({ year: y, rho: -spearman(c.map(p => p.pick), c.map(p => p.av)) })
     }
     return out

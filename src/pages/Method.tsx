@@ -9,9 +9,10 @@ export default function MethodPage({ data }: { data: Dataset }) {
 
       <Block t="Data">
         <p>
-          <strong>NFL outcomes:</strong> every NFL draft pick from 2000 onward, from the open{' '}
-          <a href="https://github.com/nflverse/nflverse-data" style={{ textDecoration: 'underline' }}>nflverse</a> project, which carries
-          Pro Football Reference career data. The dataset was last rebuilt on {new Date(data.generated).toLocaleDateString('en-US', { dateStyle: 'long' })}.
+          <strong>Players:</strong> everyone who entered the NFL from {data.model.firstClass} to {data.model.lastClass}, drafted or not:
+          {' '}{data.players.length.toLocaleString()} players ({data.players.filter(p => !p.pick).length.toLocaleString()} undrafted). Everything comes from the open{' '}
+          <a href="https://github.com/nflverse/nflverse-data" style={{ textDecoration: 'underline' }}>nflverse</a> project: draft picks with
+          Pro Football Reference career data, the player registry, season stats, depth charts (2001–11) and snap counts (2012+). The dataset was last rebuilt on {new Date(data.generated).toLocaleDateString('en-US', { dateStyle: 'long' })}.
         </p>
         <p>
           <strong>Career value</strong> is Pro Football Reference’s weighted Approximate Value (AV), the one measure that compares a
@@ -23,6 +24,33 @@ export default function MethodPage({ data }: { data: Dataset }) {
         </p>
       </Block>
 
+      <Block t="Undrafted players">
+        <p>
+          Pro Football Reference’s AV is only published with draft data, so undrafted players get an <strong>estimated AV</strong>, marked
+          with an asterisk. A regression for each position group learns how games, starts, seasons and position stats turn into AV for
+          drafted players whose real AV we know, then applies it to undrafted players. Fit (R²) by group:{' '}
+          {Object.entries(data.model.avModel).map(([g, m]) => `${g} ${m.r2.toFixed(2)}`).join(' · ')}.
+        </p>
+        <p>Undrafted players are compared with other undrafted players from nearby classes, since there is no draft slot to compare against.
+          Pro Bowl and All-Pro honors aren’t in the source data for them yet.</p>
+      </Block>
+
+      <Block t="Early careers">
+        <p>
+          Players from the <strong>{data.model.youngFrom}–{data.model.lastClass}</strong> classes have only a few seasons behind them, so they get their own track.
+          They are compared on <strong>pace</strong>: career value per season so far, with the current season counting as a fraction. The comparison group
+          is every other young player at their position drafted near the same slot. Their Outlier Index is an <em>early read</em>, and their pages carry
+          accolades a short career can already earn: Pro Bowls, class rank, day-one starter, steal of the class.
+        </p>
+      </Block>
+
+      <Block t="Season stats">
+        <p>
+          Season-by-season tables use nflverse regular-season stats. <strong>Games started</strong> means first string on the weekly depth chart
+          (2001–2011) or at least 50% of offensive or defensive snaps (2012+). College stats will be added with the recruiting data.
+        </p>
+      </Block>
+
       <Block t="Expected value">
         <p>
           For each player we build a comparison group: players at the <strong>same position group</strong>, from <strong>nearby draft
@@ -31,7 +59,7 @@ export default function MethodPage({ data }: { data: Dataset }) {
         </p>
         <p>
           Recent classes are only compared with classes of the <strong>same age</strong>, so a 2022 pick is judged against careers of the same
-          length. Classes after {data.model.lastJudgedClass} are left out because their careers are too young to judge. If a comparison group is smaller than
+          length. Classes after {data.model.lastJudgedClass} use the early-career track above. If a comparison group is smaller than
           {' '}{data.model.minPeers} effective players, the window widens. Players whose group stays thin are flagged on their page.
         </p>
         <p><strong>Gap</strong> = actual AV − expected AV. <strong>Percentile</strong> = the weighted share of comparable picks this player outplayed.</p>
@@ -64,7 +92,7 @@ export default function MethodPage({ data }: { data: Dataset }) {
       </Block>
 
       <Block t="Known limits">
-        <p>Undrafted players aren’t in the dataset yet, so some of the greatest outliers are missing. AV is an approximation and favors positions with box-score stats. Active careers can still change in either direction.</p>
+        <p>Undrafted players’ value is estimated, and the registry is less complete for undrafted players who never reached a game-day roster in the early 2000s. AV is an approximation and favors positions with box-score stats. Active careers can still change in either direction.</p>
       </Block>
     </div>
   )

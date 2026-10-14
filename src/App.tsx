@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { loadData, type Dataset } from './data'
+import { loadData, shortPick, type Dataset } from './data'
 import { go, playerHref, useRoute } from './ui'
 import Home from './pages/Home'
 import PlayerPage from './pages/Player'
@@ -8,8 +8,10 @@ import PathsPage from './pages/Paths'
 import LabPage from './pages/Lab'
 import DebatePage from './pages/Debate'
 import MethodPage from './pages/Method'
+import PlayersPage from './pages/Players'
 
 const NAV = [
+  ['/players', '00', 'Players'],
   ['/gap', '01', 'Expectation Gap'],
   ['/paths', '02', 'Career DNA'],
   ['/lab', '03', 'Development Lab'],
@@ -52,7 +54,8 @@ export default function App() {
   let page = <div className="loading">loading careers…</div>
   if (data) {
     page =
-      section === 'p' ? <PlayerPage data={data} id={decodeURIComponent(arg ?? '')} />
+      section === 'players' ? <PlayersPage data={data} />
+      : section === 'p' ? <PlayerPage data={data} id={decodeURIComponent(arg ?? '')} />
       : section === 'gap' ? <GapPage data={data} />
       : section === 'paths' ? <PathsPage data={data} archetype={arg ? decodeURIComponent(arg) : undefined} />
       : section === 'lab' ? <LabPage data={data} college={arg ? decodeURIComponent(arg) : undefined} />
@@ -130,7 +133,10 @@ function Search({ data, close }: { data: Dataset; close: () => void }) {
           onKeyDown={e => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s + 1, results.length - 1)) }
             if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => Math.max(s - 1, 0)) }
-            if (e.key === 'Enter') open(sel)
+            if (e.key === 'Enter') {
+              if (results.length) open(sel)
+              else { go(`/players?q=${encodeURIComponent(q)}`); close() }
+            }
           }}
         />
         {q.trim().length >= 2 && (
@@ -140,12 +146,13 @@ function Search({ data, close }: { data: Dataset; close: () => void }) {
                 <li key={p.id} className={i === sel ? 'sel' : ''} onMouseEnter={() => setSel(i)}>
                   <a href={playerHref(p)} onClick={close}>
                     <span><strong>{p.name}</strong> <span className="faint">{p.pos} · {p.college}</span></span>
-                    <span className="mono faint">{p.year} · #{p.pick}</span>
+                    <span className="mono faint">{p.year} · {shortPick(p)}</span>
                   </a>
                 </li>
               ))}
+              <li className="all"><a href={`#/players?q=${encodeURIComponent(q)}`} onClick={close}><span>See every match in the directory →</span></a></li>
             </ul>
-          ) : <div className="empty">No drafted player matches “{q}”. Undrafted players aren’t in the dataset yet.</div>
+          ) : <div className="empty">No player matches “{q}”.</div>
         )}
       </div>
     </div>
