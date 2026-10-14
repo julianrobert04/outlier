@@ -97,7 +97,8 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         <h2 className="h3" style={{ marginBottom: 16 }}>How {p.name.split(' ')[0]}’s grade is built</h2>
         <StageSentences p={p} data={data} />
         <p className="meta" style={{ marginTop: 16 }}>
-          Outlier Index = getting drafted<sup>{data.model.journeyWeights.draft}</sup> × NFL career<sup>{data.model.journeyWeights.career}</sup>. <a href="#/method" style={{ textDecoration: 'underline' }}>Full method →</a>
+          Each step is a multiplier: how many times the usual outcome. The draft counts half, the career fully, and a falling career twice.
+          {' '}<a href="#/method" style={{ textDecoration: 'underline' }}>Full method →</a>
         </p>
       </section>
 
@@ -115,7 +116,7 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
           <Stage n="03" title="Draft" main={p.pick ? `#${p.pick}` : 'UDFA'}
             sub={[
               p.pick ? `${ordinal(p.round)} round · ${p.team} · ${p.year}` : `Signed after the ${p.year} draft`,
-              p.from === 'recruit' && p.spct != null ? `ahead of ${Math.round(p.spct * 100)}% of ${p.stars}★ recruits` : '',
+              p.from === 'recruit' && p.sDraftRate != null ? `only ${Math.round(p.sDraftRate * 100)}% of ${p.stars}★ recruits get drafted` : '',
             ].filter(Boolean).join(' · ')} />
           <Stage n="04" title={p.young ? 'NFL so far' : 'NFL career'} main={`${p.av} AV${p.est ? '*' : ''}`}
             sub={[
@@ -206,22 +207,17 @@ function collegeLine(p: Player, d: Dataset) {
   return `One of ${n.toLocaleString()} ${p.college} players in the NFL since ${d.model.firstClass}`
 }
 
+// One sentence that matches the grade (the ladder of expectations).
 function verdict(p: Player) {
-  const pct = p.pct
-  const slot = p.pick ? `a #${p.pick} pick` : 'an undrafted player'
+  const g = p.oi
   if (!p.games) return p.young ? 'Hasn’t played a regular-season game yet.' : `${p.pick ? `Drafted #${p.pick}` : 'Went undrafted'}, never played a regular-season game.`
-  if (p.young) {
-    if (pct >= 90) return `Producing far faster than ${slot} usually does. Early, but rare.`
-    if (pct >= 60) return `Ahead of the usual pace for ${slot}.`
-    if (pct >= 30) return `On roughly the usual pace for ${slot}. Still early.`
-    return `Behind the usual pace for ${slot}, for now.`
-  }
-  if (pct >= 99) return `One of the most improbable careers from this starting point. Outplayed virtually every comparable player.`
-  if (pct >= 85) return `Became far more than ${slot} usually becomes.`
-  if (pct >= 60) return `Beat the prediction.`
-  if (pct >= 40) return `Roughly what ${slot} is expected to become.`
-  if (pct >= 15) return `Fell short of what ${slot} usually becomes.`
-  return `Among the furthest falls from expectation at this starting point.`
+  const soFar = p.young ? ' so far' : ''
+  if (g >= 0.99) return `One of the biggest climbs of the era: far beyond every expectation${soFar}.`
+  if (g >= 0.9) return `Rose well beyond what was expected${soFar}.`
+  if (g >= 0.65) return `Beat expectations${soFar}.`
+  if (g >= 0.35) return `Roughly what was expected${soFar}.`
+  if (g >= 0.1) return `Fell short of expectations${soFar}.`
+  return `One of the steepest falls from expectation${soFar}.`
 }
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: 'over' | 'under' }) {

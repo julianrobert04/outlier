@@ -83,18 +83,21 @@ export default function MethodPage({ data }: { data: Dataset }) {
           One number from <strong>.01 to .99</strong> for the whole journey. It scores each stage we can measure as a percentile:
         </p>
         <p>
-          <strong>1. Stars → draft.</strong> Where the player was drafted, against every recruit with the same star rating, position and era,
-          <em>including those who never reached the NFL</em>.<br />
-          <strong>2. Draft → career.</strong> How far NFL career value beat the expected value for the player’s draft slot (see Expected value
-          below), ranked against every player at the same position since {data.model.firstClass}, drafted or not. Early careers are ranked among
-          {' '}{data.model.youngFrom}+ classes on gap per season.
+          The grade is a <strong>ladder of expectations</strong>. Every step is a multiplier: how many times the usual outcome the player got.
         </p>
         <p>
-          The stages combine as a <strong>weighted geometric mean</strong>, {Math.round(data.model.journeyWeights.draft * 100)}% stars → draft and
-          {' '}{Math.round(data.model.journeyWeights.career * 100)}% draft → career. Multiplying instead of averaging means a collapse can’t be cancelled out by a great
-          climb before it. A 2-star who reaches the Hall of Fame is a .99. A 4-star who goes #1 overall and is out of the league quickly
-          (JaMarcus Russell) climbs to .99, collapses to .01, and lands at .03. Without a linked star rating, the index is stage 2 alone.
-          Grades round <em>down</em>, so .99 means the top 1% of the era, and early careers are capped at {data.model.earlyCap.toFixed(2).replace(/^0/, '')} until they’ve run longer.
+          <strong>1. Stars → draft.</strong> Draft value of the player’s slot, divided by the average draft value of every recruit with the same
+          star rating and position from the same era, <em>including those who never reached the NFL</em> (worth zero). Draft value is the average
+          career a pick at that slot produces. Rare ratings (5★s) widen the comparison window until at least 30 recruits are included.<br />
+          <strong>2. Draft → career.</strong> NFL career value divided by what the player’s draft slot usually produces (see Expected value below).
+        </p>
+        <p>
+          Combined: <span className="num">M = √(draft multiplier) × career multiplier</span>, with the career multiplier squared when it is below 1.
+          The draft step counts half, the career fully, and a collapse twice. Without a star rating the draft step is ×1.
+          The grade is <span className="num">M<sup>{data.model.gradeCurve}</sup> ÷ (M<sup>{data.model.gradeCurve}</sup> + 1)</span>, so .50 means exactly as expected and .99 takes
+          roughly a 22× climb. Grades round down, and early careers are capped at {data.model.earlyCap.toFixed(2).replace(/^0/, '')} until they’ve run longer.
+          Examples: Travis Kelce (2★, #63, then 7× his slot) .99; Myles Garrett (5★, #1 as expected, then 2× his slot) .88; JaMarcus Russell
+          (4★, #1, then 0.08× his slot) .01.
           {' '}{data.recruitingLinked.toLocaleString()} players are linked to a 247Sports Composite rating.
         </p>
       </Block>

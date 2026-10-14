@@ -1,47 +1,48 @@
-import { GROUP_NAME, oiLabel, shortPick, type Dataset, type Player } from './data'
+import { oiLabel, shortPick, times, type Dataset, type Player } from './data'
 import { playerHref } from './ui'
 
-// The Outlier Index, explained with a real player's own numbers. Every value
-// shown is read from the data; the product shown is the actual grade.
+// The Outlier Index as a ladder of expectations, explained with a player's own
+// numbers. Every value shown is read from the data.
 
-const clamp = (x: number) => Math.min(0.99, Math.max(0.01, x))
-const two = (x: number) => oiLabel(clamp(Math.floor(x * 100 + 1e-9) / 100))
-const pctText = (x: number) => `${Math.round(clamp(x) * 100)}%`
+const grade = (m: number, curve: number) => {
+  const x = Math.pow(m, curve)
+  return Math.min(0.99, Math.max(0.01, Math.floor((x / (x + 1)) * 100 + 1e-9) / 100))
+}
 
-export function stages(p: Player) {
-  const hasStars = p.from === 'recruit' && p.spct != null
-  return { hasStars, s1: hasStars ? clamp(p.spct!) : null, s2: clamp(p.gpct) }
+function draftSentence(p: Player) {
+  const usual = p.sDraftRate != null
+    ? `Only ${Math.round(p.sDraftRate * 100)}% of ${p.stars}★ ${p.grp} recruits get drafted${p.sMedianPick ? `, usually around pick ${p.sMedianPick}` : ''}.`
+    : ''
+  const went = p.pick ? `He went #${p.pick}` : 'He went undrafted'
+  return `${usual} ${went}: ${times(p.m1!)} the draft value a ${p.stars}★ usually gets.`
 }
 
 export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
-  const { hasStars, s1, s2 } = stages(p)
-  const pos = GROUP_NAME[p.grp].toLowerCase()
+  const falling = p.m2 < 1
   return (
     <ol className="stages">
       <li>
         <span className="stage-label">1 · Getting drafted</span>
-        {hasStars ? (
+        {p.m1 != null ? (
           <>
-            <span className="stage-value num">{two(s1!)}</span>
-            <span className="stage-text">
-              A {p.stars}★ {p.grp} recruit, {p.pick ? `drafted #${p.pick}` : 'undrafted'}. That’s higher than {pctText(s1!)} of
-              {' '}{p.stars}★ {p.grp} recruits, most of whom never reached the NFL.
-            </span>
+            <span className={`stage-value num ${p.m1 >= 1 ? '' : 'under'}`}>{times(p.m1)}</span>
+            <span className="stage-text">{draftSentence(p)}</span>
           </>
         ) : (
           <>
             <span className="stage-value num faint">—</span>
-            <span className="stage-text">No high-school rating on record, so this stage is skipped.</span>
+            <span className="stage-text">No high-school rating on record, so this step counts as ×1.</span>
           </>
         )}
       </li>
       <li>
         <span className="stage-label">2 · The NFL career{p.young ? ' so far' : ''}</span>
-        <span className="stage-value num">{two(s2)}</span>
+        <span className={`stage-value num ${falling ? 'under' : ''}`}>{times(p.m2)}</span>
         <span className="stage-text">
-          {p.av} career value{p.est ? ' (estimated)' : ''} against {p.exp.toFixed(0)} expected for {p.pick ? `a #${p.pick} pick` : 'an undrafted player'}.
-          {' '}That beat expectation by more than {pctText(s2)} of {pos}
-          {p.young ? ` from the ${data.model.youngFrom}+ classes (per season)` : ` since ${data.model.firstClass}`}.
+          {p.av} career value{p.est ? ' (estimated)' : ''} against {p.exp.toFixed(0)} expected
+          {' '}{p.pick ? `from pick #${p.pick}` : 'for an undrafted player'}{p.young ? ` by year ${Math.round(data.lastSeason - p.year + 1)}` : ''}
+          {' '}for {p.grp === 'ST' ? 'a specialist' : `a ${p.grp}`}.
+          {falling ? ' A falling career counts double.' : ''}
         </span>
       </li>
     </ol>
@@ -49,38 +50,47 @@ export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
 }
 
 export function Equation({ p, data }: { p: Player; data: Dataset }) {
-  const { hasStars, s1, s2 } = stages(p)
-  const w = data.model.journeyWeights
+  const falling = p.m2 < 1
   return (
     <div className="equation num" aria-label={`Outlier Index ${oiLabel(p.oi)}`}>
-      {hasStars
-        ? <><span>{two(s1!)}<sup>{w.draft}</sup></span><span className="op">×</span><span>{two(s2)}<sup>{w.career}</sup></span></>
-        : <span>{two(s2)}</span>}
-      <span className="op">=</span>
+      {p.m1 != null && <><span>√{times(p.m1).slice(1)}</span><span className="op">×</span></>}
+      {p.m1 == null && !falling
+        ? <span>{times(p.mult)}</span>
+        : <>
+          <span>{times(p.m2).slice(1)}{falling && <sup>2</sup>}</span>
+          <span className="op">=</span>
+          <span>{times(p.mult)}</span>
+        </>}
+      <span className="op">→</span>
       <strong className={p.oi >= 0.95 ? 'over' : p.oi <= 0.05 ? 'under' : ''}>{oiLabel(p.oi)}</strong>
-      {!!p.young && p.oi === data.model.earlyCap && <span className="meta" style={{ alignSelf: 'center' }}>early read, capped at {oiLabel(data.model.earlyCap)}</span>}
+      {!!p.young && p.oi === data.model.earlyCap && grade(p.mult, data.model.gradeCurve) > p.oi &&
+        <span className="meta" style={{ alignSelf: 'center' }}>early read, capped at {oiLabel(data.model.earlyCap)}</span>}
     </div>
   )
 }
 
+const SCALE = [0.1, 0.33, 1, 2, 5, 10, 25]
+
 export function FormulaExplainer({ data, ids }: { data: Dataset; ids: string[] }) {
   const examples = ids.map(id => data.byId.get(id)).filter((p): p is Player => !!p)
-  const w = data.model.journeyWeights
+  const curve = data.model.gradeCurve
   return (
     <div className="explainer">
       <div className="rule-box">
-        <p className="h3">The grade in one line</p>
-        <p className="equation num" style={{ marginTop: 12 }}>
-          <span>Getting drafted<sup>{w.draft}</sup></span><span className="op">×</span>
-          <span>NFL career<sup>{w.career}</sup></span><span className="op">=</span><strong>Outlier Index</strong>
-        </p>
+        <p className="h3">A ladder of expectations</p>
         <ul className="plain">
-          <li><strong>Each stage is a percentile</strong>, from .01 to .99: the share of comparable players this one beat. No opinions, no scouting grades. Only where they were drafted and what they produced.</li>
-          <li><strong>Getting drafted</strong> compares a recruit with every recruit of the same stars and position, including the many who never reached the NFL.</li>
-          <li><strong>NFL career</strong> measures how far the player beat what history expects from their draft slot, ranked against every player at the position since {data.model.firstClass}.</li>
-          <li><strong>The stages multiply</strong>, and the NFL career counts more ({Math.round(w.career * 100)}%). A great climb can’t hide a collapse.</li>
-          <li><strong>.99 is the top 1%</strong> of the era. Grades round down, and early careers stop at {oiLabel(data.model.earlyCap)} until they’ve run longer.</li>
+          <li><strong>The star rating sets the bar.</strong> The data shows what usually happens to recruits with that rating: how many get drafted, and where.</li>
+          <li><strong>Step 1, getting drafted.</strong> How many times more (or less) draft value the player got than recruits with his stars usually get. A 2★ in round 2 is a big jump. A 5★ in round 1 is what was expected.</li>
+          <li><strong>Step 2, the NFL career.</strong> How many times more (or less) career value than his draft slot usually produces.</li>
+          <li><strong>Steps multiply.</strong> The draft counts half (square root), the career counts fully, and a falling career counts double.</li>
+          <li><strong>The grade.</strong> .50 means exactly as expected. Only about {data.players.filter(p => p.oi >= 0.99).length} careers since {data.model.firstClass} reach .99. Grades round down, and early careers stop at {oiLabel(data.model.earlyCap)}.</li>
         </ul>
+        <div style={{ overflowX: 'auto', marginTop: 16 }}>
+        <table className="rows scale">
+          <thead><tr><th>Overall</th>{SCALE.map(m => <th key={m} className="r">{times(m)}</th>)}</tr></thead>
+          <tbody><tr><td className="mono">Grade</td>{SCALE.map(m => <td key={m} className="r num">{oiLabel(grade(m, curve))}</td>)}</tr></tbody>
+        </table>
+        </div>
       </div>
       <div className="examples">
         {examples.map(p => (

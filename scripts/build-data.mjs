@@ -378,17 +378,16 @@ function archetype(p) {
 }
 
 // ── Outlier Index ──────────────────────────────────────────────────────────
-// One number, .01 to .99, combining how far a player beat expectation at each
-// stage of the journey we can measure:
-//   1. stars → draft: where they landed in the draft vs every recruit with the
-//      same star rating (position, era), including those who never got drafted;
-//   2. draft → career: NFL career value vs comparable picks (or undrafted peers).
-// Stages combine as a weighted geometric mean, with the NFL career weighted
-// most (JOURNEY_WEIGHTS): a collapse at the end can't be cancelled out by a
-// great climb before it. A 2-star who reaches Canton is .99; a 4-star who goes
-// #1 and busts climbs (.99), collapses (.01) and lands near .04. Without a
-// linked star rating the index is stage 2 alone. Early-career players are only ever
-// compared with their own class.
+// One number, .01 to .99: a ladder of expectations. Each step is a multiplier.
+//   draft multiplier  = draft value of the slot ÷ what recruits with the same
+//                       stars and position usually get (stars → draft)
+//   career multiplier = NFL career value ÷ what that draft slot usually
+//                       produces (draft → career)
+// M = √(draft multiplier) × career multiplier, and a falling career counts
+// double (squared below 1): the draft counts half, the career fully, a
+// collapse twice. Without a star rating the draft multiplier is 1. The grade
+// is M^GRADE_CURVE / (M^GRADE_CURVE + 1): .50 means exactly as expected, and
+// .99 takes about a 21× climb. Early careers are capped at EARLY_CAP.
 
 const RECRUIT_GROUP = {
   PRO: 'QB', DUAL: 'QB', QB: 'QB', RB: 'RB', APB: 'RB', FB: 'RB', WR: 'WR', TE: 'TE',
@@ -396,32 +395,20 @@ const RECRUIT_GROUP = {
   SDE: 'DL', WDE: 'DL', DT: 'DL', DL: 'DL', EDGE: 'DL', DE: 'DL',
   ILB: 'LB', OLB: 'LB', LB: 'LB', CB: 'DB', S: 'DB', DB: 'DB', K: 'ST', P: 'ST', LS: 'ST',
 }
-const JOURNEY_WEIGHTS = { draft: 0.3, career: 0.7 } // stars → draft, draft → career
-const journey = (stage1, stage2) => {
-  const c = x => Math.min(0.99, Math.max(0.01, x))
-  return Math.exp(JOURNEY_WEIGHTS.draft * Math.log(c(stage1)) + JOURNEY_WEIGHTS.career * Math.log(c(stage2)))
-}
-// Stage 2, draft → career: how far the player beat expectation (actual AV minus
-// expected), ranked against EVERY player at the position since FIRST_CLASS,
-// drafted or not. Ranking against the whole position, not just the handful
-// picked near the same slot, is what keeps .99 rare: it takes one of the
-// biggest gaps of the era, not merely the best of a small group.
-// Early-career players are ranked among themselves on gap per season.
-function stageTwo(players) {
-  const pools = new Map()
-  for (const p of players) {
-    const k = `${p.grp}|${p.young ? 'young' : 'judged'}`
-    pools.set(k, [...(pools.get(k) ?? []), p])
-  }
-  for (const pool of pools.values()) {
-    const v = p => (p.young ? (p.av - p.exp) / yearsIn(p) : p.av - p.exp)
-    const vals = pool.map(v)
-    pool.forEach((p, i) => { p.gpct = midRank(vals[i], vals) })
-  }
-}
 // An early read can't reach the top of the scale until the career has run.
 const EARLY_CAP = 0.95
-// The final grade rounds down: .99 means the top 1%, never "rounded up to it".
+const GRADE_CURVE = 1.5
+const careerMultiplier = p => (Math.max(p.av, 0) + 1) / (p.exp + 1)
+function finalGrade(p) {
+  const career = careerMultiplier(p)
+  const m = Math.sqrt(p.m1 ?? 1) * (career < 1 ? career * career : career)
+  const x = Math.pow(m, GRADE_CURVE)
+  p.m2 = career
+  p.mult = m
+  const oi = gradeOI(x / (x + 1))
+  return p.young ? Math.min(oi, EARLY_CAP) : oi
+}
+// The final grade rounds down, never up to the next step.
 const gradeOI = x => Math.min(0.99, Math.max(0.01, Math.floor(x * 100 + 1e-9) / 100))
 const clampOI = x => Math.min(0.99, Math.max(0.01, Math.round(x * 100) / 100))
 const normName = s => s.toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '')
@@ -433,9 +420,34 @@ function midRank(value, values) {
   return (below + equal / 2) / values.length
 }
 
+// Draft capital: the average full career (AV) produced by a pick at each slot,
+// smoothed on ln(pick), from every completed career (drafted classes up to
+// YOUNG_FROM - 1). Undrafted signings get the average undrafted career.
+function draftCapital(players) {
+  const judged = players.filter(p => !p.young)
+  const drafted = judged.filter(p => p.pick > 0)
+  const udfa = judged.filter(p => !p.pick)
+  const udfaValue = udfa.reduce((s, p) => s + p.av, 0) / Math.max(udfa.length, 1)
+  const cache = new Map()
+  return pick => {
+    if (!pick) return udfaValue
+    if (cache.has(pick)) return cache.get(pick)
+    const lp = Math.log(pick)
+    let sw = 0, sa = 0
+    for (const q of drafted) {
+      const d = (Math.log(q.pick) - lp) / 0.2
+      const k = Math.exp(-0.5 * d * d)
+      sw += k; sa += k * q.av
+    }
+    const v = sw ? sa / sw : 0
+    cache.set(pick, v)
+    return v
+  }
+}
+
 async function outlierIndex(players) {
   for (const p of players) {
-    p.oi = gradeOI(p.gpct); p.from = p.pick ? 'draft' : 'udfa'; p.stars = 0; p.rating = 0; p.spct = null
+    p.from = p.pick ? 'draft' : 'udfa'; p.stars = 0; p.rating = 0; p.m1 = null
   }
   if (!existsSync(`${RAW}/recruits.json`)) return 0
   const recruits = JSON.parse(await readFile(`${RAW}/recruits.json`, 'utf8'))
@@ -452,22 +464,68 @@ async function outlierIndex(players) {
     if (p) { p.recruit = r; r.player = p; linked++ }
   }
 
-  // Stage 1 outcome for every recruit: how high they were drafted. Reaching
-  // the league undrafted beats never reaching it.
-  const slot = p => (p.pick || UDFA_PICK)
-  const draftValue = r => (r.player ? 301 - slot(r.player) : 0)
+  // Stage 1, stars → draft: how much draft value the recruit got versus what
+  // recruits with the same stars and position usually get. Draft value is one
+  // fixed scale: the average career a pick at that slot produces (from every
+  // completed career since FIRST_CLASS), a small amount for signing undrafted,
+  // zero for never reaching the NFL. A 2-star taken in round 2 is a big
+  // surprise; a 5-star taken in round 1 is what was expected, so only a small
+  // gain; a 5-star who goes undrafted is a big fall. Surprise is a ratio,
+  // ln((value + 1) / (expected + 1)), so it reads as "how many times more
+  // than expected", and it is ranked against every NFL player at the position
+  // with a star rating, all star levels together.
+  const capital = draftCapital(players)
+  const value = r => (r.player ? capital(r.player.pick) : 0)
   const lastJudged = YOUNG_FROM - 4 // recruiting classes whose careers are judged in full
+  const key = (stars, grp, year) => `${stars}|${grp ?? 'ANY'}|${year}`
+  const agg = new Map()
+  for (const r of recruits) {
+    if (!r.stars) continue
+    const v = value(r)
+    for (const k of [key(r.stars, r.grp, r.year), key(r.stars, null, r.year)]) {
+      const a = agg.get(k) ?? { sum: 0, n: 0, drafted: 0, picks: [] }
+      a.sum += v; a.n++
+      if (r.player?.pick) { a.drafted++; a.picks.push(r.player.pick) }
+      agg.set(k, a)
+    }
+  }
+  // Expected draft value for a star level at a position. Rare levels (5-stars
+  // are ~6 per position per year) widen the year window until at least
+  // MIN_RECRUITS recruits are pooled, then fall back to all positions.
+  const MIN_RECRUITS = 30
+  const expectation = r => {
+    const young = r.year > lastJudged
+    const gather = (grp, w) => {
+      let sum = 0, n = 0, drafted = 0, picks = []
+      for (let y = r.year - w; y <= r.year + w; y++) {
+        if (young ? y <= lastJudged : y > lastJudged) continue // never mix career lengths
+        const a = agg.get(key(r.stars, grp, y))
+        if (a) { sum += a.sum; n += a.n; drafted += a.drafted; picks = picks.concat(a.picks) }
+      }
+      return { sum, n, drafted, picks }
+    }
+    let g = null
+    for (const grp of [r.grp, null]) {
+      for (let w = young ? 0 : yearWindow(r.year + 4); w <= 8; w++) {
+        g = gather(grp, w)
+        if (g.n >= MIN_RECRUITS) break
+      }
+      if (g.n >= MIN_RECRUITS) break
+    }
+    g.picks.sort((a, b) => a - b)
+    return { mean: g.n ? g.sum / g.n : 0, n: g.n, draftRate: g.n ? g.drafted / g.n : 0, medianPick: g.picks.length ? g.picks[g.picks.length >> 1] : null }
+  }
   for (const p of players) {
     const r = p.recruit
     if (!r || !r.stars) continue
-    const young = r.year > lastJudged
-    const w = young ? 0 : yearWindow(r.year + 4)
-    const cohort = recruits.filter(q => q.stars === r.stars && Math.abs(q.year - r.year) <= w &&
-      (young || q.year <= lastJudged) && (!r.grp || q.grp === r.grp))
-    if (cohort.length < 30) continue
-    p.spct = clampOI(midRank(draftValue(r), cohort.map(draftValue)))
-    p.oi = gradeOI(journey(p.spct, p.gpct))
+    const e = expectation(r)
+    if (e.n < MIN_RECRUITS) continue
+    p.m1 = (value(r) + 1) / (e.mean + 1)
     p.from = 'recruit'; p.stars = r.stars; p.rating = Math.round(r.rating * 10000) / 10000
+    p.sDraftRate = Math.round(e.draftRate * 1000) / 1000
+    p.sMedianPick = e.medianPick
+    p.sValue = Math.round(value(r) * 10) / 10
+    p.sExpected = Math.round(e.mean * 10) / 10
   }
   return linked
 }
@@ -622,9 +680,8 @@ async function main() {
     cls.forEach((p, i) => { p.classRank = i + 1 })
     for (const g of byGroup.keys()) cls.filter(p => p.grp === g).forEach((p, i) => { p.posRank = i + 1 })
   }
-  stageTwo(players)
   const recruited = await outlierIndex(players)
-  for (const p of players) if (p.young) p.oi = Math.min(p.oi, EARLY_CAP)
+  for (const p of players) p.oi = finalGrade(p)
   const collegeLinked = await linkCollege(players)
   for (const p of players) { p.cpct ??= null; p.cseasons = p.collegeRows?.length ?? 0 }
 
@@ -647,9 +704,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'oi', 'gpct', 'rank', 'of', 'from', 'stars', 'rating', 'spct', 'cpct', 'cseasons']
-  // spct stays null when there is no recruiting link: null means "unknown", never 0%.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'gpct' ? Math.round(v * 1000) / 1000 : f === 'spct' || f === 'cpct' ? v ?? null : v ?? 0)
+    'oi', 'm1', 'm2', 'mult', 'rank', 'of', 'from', 'stars', 'rating', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+  // Recruiting fields stay null when there is no link: null means "unknown", never 0.
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({
@@ -658,7 +715,7 @@ async function main() {
     lastSeason: LAST_SEASON,
     model: {
       bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: FIRST_CLASS, lastClass: LAST_CLASS,
-      youngFrom: YOUNG_FROM, journeyWeights: JOURNEY_WEIGHTS, earlyCap: EARLY_CAP, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
+      youngFrom: YOUNG_FROM, gradeCurve: GRADE_CURVE, earlyCap: EARLY_CAP, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,

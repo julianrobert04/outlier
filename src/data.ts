@@ -31,13 +31,16 @@ export type Player = {
   dna: string
   line: string
   oi: number // Outlier Index, .01–.99
-  gpct: number // stage 2: gap vs expectation, percentile within position (all eras)
+  m1: number | null // draft multiplier: draft value ÷ usual for the star rating
+  m2: number // career multiplier: career value ÷ usual for the draft slot
+  mult: number // combined multiplier behind the grade
   rank: number // place among core comparable players (1 = best)
   of: number
   from: 'recruit' | 'draft' | 'udfa' // the stage the index is measured from
   stars: number
   rating: number
-  spct: number | null // stars → draft percentile
+  sDraftRate: number | null // share of same-star recruits who got drafted
+  sMedianPick: number | null // typical pick for those who did
   cpct: number | null // college production percentile within position group
   cseasons: number
 }
@@ -57,7 +60,7 @@ export type Dataset = {
   recruitingLinked: number
   model: {
     bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; lastClass: number
-    youngFrom: number; journeyWeights: { draft: number; career: number }; earlyCap: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
+    youngFrom: number; gradeCurve: number; earlyCap: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]
   collegeCols: string[]
@@ -90,6 +93,9 @@ export const ordinal = (n: number) => {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100
   return n + (s[(v - 20) % 10] || s[v] || s[0])
 }
+
+// "×12", "×3.5", "×0.08": how many times the usual outcome.
+export const times = (x: number) => `×${x >= 10 ? Math.round(x) : x >= 1 ? x.toFixed(1) : x >= 0.1 ? x.toFixed(2) : x.toFixed(3)}`
 
 export const oiLabel = (x: number) => x.toFixed(2).replace(/^0/, '')
 
