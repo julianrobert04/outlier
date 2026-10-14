@@ -34,6 +34,9 @@ export type Player = {
   m1: number | null // draft multiplier: draft value ÷ usual for the star rating
   m2: number // career multiplier: career value ÷ usual for the draft slot
   mult: number // combined multiplier behind the grade
+  ladder: number // grade from the ladder alone
+  q: number // career quality: career value percentile within position
+  qgrade: number // career quality on the steep scale (quality^6)
   rank: number // place among core comparable players (1 = best)
   of: number
   from: 'recruit' | 'draft' | 'udfa' // the stage the index is measured from
@@ -60,7 +63,7 @@ export type Dataset = {
   recruitingLinked: number
   model: {
     bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; lastClass: number
-    youngFrom: number; gradeCurve: number; earlyCap: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
+    youngFrom: number; gradeCurve: number; earlyCap: number; activeCap: number; eliteTop: number; eliteFrom: number; qualityPower: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]
   collegeCols: string[]
@@ -96,6 +99,13 @@ export const ordinal = (n: number) => {
 
 // "×12", "×3.5", "×0.08": how many times the usual outcome.
 export const times = (x: number) => `×${x >= 10 ? Math.round(x) : x >= 1 ? x.toFixed(1) : x >= 0.1 ? x.toFixed(2) : x.toFixed(3)}`
+
+// What a grade means, in words.
+export const GRADE_BANDS: [number, string][] = [
+  [0.99, 'Legendary'], [0.95, 'Great'], [0.85, 'Very good'], [0.7, 'Solid'],
+  [0.5, 'As expected'], [0.25, 'Below expectations'], [0, 'Bust'],
+]
+export const gradeWord = (x: number) => GRADE_BANDS.find(([t]) => x >= t)![1]
 
 export const oiLabel = (x: number) => x.toFixed(2).replace(/^0/, '')
 

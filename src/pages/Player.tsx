@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  accolades, ALL_ARCHETYPES, gap, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
+  accolades, ALL_ARCHETYPES, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
   shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season,
 } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
@@ -66,7 +66,7 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
             {oiLabel(p.oi)}
           </div>
           <div className="oi-rank">
-            <strong style={{ color: 'var(--ink)' }}>Outlier Index{p.young ? ', early read' : ''}</strong>
+            <strong style={{ color: 'var(--ink)' }}>{gradeWord(p.oi)}</strong> · Outlier Index{p.young ? ', early read' : p.active ? ', career in progress' : ''}
             {isExtreme(p) && <> · career {rankLabel(p).toLowerCase().replace('no.', 'No.')} comparable players</>}
           </div>
           <Equation p={p} data={data} />

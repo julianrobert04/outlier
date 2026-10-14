@@ -96,8 +96,17 @@ export default function MethodPage({ data }: { data: Dataset }) {
           The draft step counts half, the career fully, and a collapse twice. Without a star rating the draft step is ×1.
           The grade is <span className="num">M<sup>{data.model.gradeCurve}</sup> ÷ (M<sup>{data.model.gradeCurve}</sup> + 1)</span>, so .50 means exactly as expected and .99 takes
           roughly a 22× climb. Grades round down, and early careers are capped at {data.model.earlyCap.toFixed(2).replace(/^0/, '')} until they’ve run longer.
-          Examples: Travis Kelce (2★, #63, then 7× his slot) .99; Myles Garrett (5★, #1 as expected, then 2× his slot) .88; JaMarcus Russell
-          (4★, #1, then 0.08× his slot) .01.
+        </p>
+        <p>
+          <strong>3. How good the career was.</strong> The numbers count, not only expectations. Total career value (Pro Football Reference’s AV,
+          built from the player’s stats) is ranked against everyone at the position who played since {data.model.firstClass}, and put on a steep scale
+          (quality<sup>{data.model.qualityPower}</sup>): better than 90% of the position is .53, 99% is .94.
+        </p>
+        <p>
+          <strong>Grade = √(ladder grade × career quality)</strong>: half climb, half career. Elite careers (top {Math.round((1 - data.model.eliteFrom) * 100)}% of a position)
+          grade .95+ even when they were expected, and .99 is the top {Math.round((1 - data.model.eliteTop) * 1000) / 10}%, if the ladder didn’t collapse.
+          Careers in progress are capped at {data.model.activeCap.toFixed(2).replace(/^0/, '')} because they can still go down.
+          Bands: .99 legendary, .95+ great, .85+ very good, .70+ solid, .50+ as expected, .25+ below expectations, under .25 bust.
           {' '}{data.recruitingLinked.toLocaleString()} players are linked to a 247Sports Composite rating.
         </p>
       </Block>

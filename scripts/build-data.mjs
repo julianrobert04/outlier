@@ -387,7 +387,8 @@ function archetype(p) {
 // double (squared below 1): the draft counts half, the career fully, a
 // collapse twice. Without a star rating the draft multiplier is 1. The grade
 // is M^GRADE_CURVE / (M^GRADE_CURVE + 1): .50 means exactly as expected, and
-// .99 takes about a 21× climb. Early careers are capped at EARLY_CAP.
+// .99 takes about a 21× climb. The career-quality ceiling and elite tier (below)
+// anchor the top to real careers; active careers are capped at ACTIVE_CAP.
 
 const RECRUIT_GROUP = {
   PRO: 'QB', DUAL: 'QB', QB: 'QB', RB: 'RB', APB: 'RB', FB: 'RB', WR: 'WR', TE: 'TE',
@@ -399,14 +400,51 @@ const RECRUIT_GROUP = {
 const EARLY_CAP = 0.95
 const GRADE_CURVE = 1.5
 const careerMultiplier = p => (Math.max(p.av, 0) + 1) / (p.exp + 1)
+// Career quality: what the player actually produced. Total career value
+// (built from his stats) as a percentile among everyone at the position who
+// played. It is half of the grade:
+//   grade = √(ladder grade × quality grade), quality grade = quality^QUALITY_POWER
+// so a big climb with a modest career lands in the middle (better than 75% of
+// QBs → .19 quality grade). Elite careers (top ELITE_FROM of a position) also
+// grade high on their own even when expected, and the top ELITE_TOP is .99.
+// Careers still in progress are capped at ACTIVE_CAP: they can still go down.
+const ELITE_TOP = 0.995
+const ELITE_FROM = 0.98
+const QUALITY_POWER = 6
+const ACTIVE_CAP = 0.97
+function careerQuality(players) {
+  const pools = new Map()
+  for (const p of players) if (!p.young && p.games > 0) pools.set(p.grp, [...(pools.get(p.grp) ?? []), p.av])
+  for (const v of pools.values()) v.sort((a, b) => a - b)
+  for (const p of players) {
+    const pool = pools.get(p.grp)
+    p.q = pool && p.games > 0 ? midRankSorted(pool, p.av) : 0
+  }
+}
+function midRankSorted(sorted, x) {
+  let lo = 0, hi = sorted.length
+  while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m] < x) lo = m + 1; else hi = m }
+  let eq = lo
+  while (eq < sorted.length && sorted[eq] === x) eq++
+  return (lo + (eq - lo) / 2) / sorted.length
+}
+const eliteGrade = q => (q >= ELITE_TOP ? 0.99 : q >= ELITE_FROM ? 0.95 + ((q - ELITE_FROM) / (ELITE_TOP - ELITE_FROM)) * 0.039 : 0)
+const qualityGrade = q => (q >= ELITE_TOP ? 0.995 : Math.pow(q, QUALITY_POWER))
 function finalGrade(p) {
   const career = careerMultiplier(p)
   const m = Math.sqrt(p.m1 ?? 1) * (career < 1 ? career * career : career)
   const x = Math.pow(m, GRADE_CURVE)
   p.m2 = career
   p.mult = m
-  const oi = gradeOI(x / (x + 1))
-  return p.young ? Math.min(oi, EARLY_CAP) : oi
+  p.ladder = gradeOI(x / (x + 1))
+  p.qgrade = p.games ? qualityGrade(p.q) : 0.0001
+  const blended = gradeOI(Math.sqrt(Math.max(x / (x + 1), 0.0001) * p.qgrade))
+  // Elite route: only when the ladder didn't collapse (a #1 pick who was merely long-lived isn't elite).
+  const elite = p.ladder >= 0.5 && eliteGrade(p.q) ? gradeOI(eliteGrade(p.q)) : 0
+  let oi = Math.max(blended, elite)
+  if (p.active) oi = Math.min(oi, ACTIVE_CAP)
+  if (p.young) oi = Math.min(oi, EARLY_CAP)
+  return oi
 }
 // The final grade rounds down, never up to the next step.
 const gradeOI = x => Math.min(0.99, Math.max(0.01, Math.floor(x * 100 + 1e-9) / 100))
@@ -681,6 +719,7 @@ async function main() {
     for (const g of byGroup.keys()) cls.filter(p => p.grp === g).forEach((p, i) => { p.posRank = i + 1 })
   }
   const recruited = await outlierIndex(players)
+  careerQuality(players)
   for (const p of players) p.oi = finalGrade(p)
   const collegeLinked = await linkCollege(players)
   for (const p of players) { p.cpct ??= null; p.cseasons = p.collegeRows?.length ?? 0 }
@@ -704,9 +743,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'oi', 'm1', 'm2', 'mult', 'rank', 'of', 'from', 'stars', 'rating', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+    'oi', 'm1', 'm2', 'mult', 'ladder', 'q', 'qgrade', 'rank', 'of', 'from', 'stars', 'rating', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
   // Recruiting fields stay null when there is no link: null means "unknown", never 0.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected'].includes(f) ? v ?? null : v ?? 0)
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' || f === 'qgrade' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({
@@ -715,7 +754,7 @@ async function main() {
     lastSeason: LAST_SEASON,
     model: {
       bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: FIRST_CLASS, lastClass: LAST_CLASS,
-      youngFrom: YOUNG_FROM, gradeCurve: GRADE_CURVE, earlyCap: EARLY_CAP, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
+      youngFrom: YOUNG_FROM, gradeCurve: GRADE_CURVE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, eliteTop: ELITE_TOP, eliteFrom: ELITE_FROM, qualityPower: QUALITY_POWER, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,
