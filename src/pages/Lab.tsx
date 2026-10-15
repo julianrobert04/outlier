@@ -52,18 +52,18 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
           <Chips value={since} onChange={setSince} label="Drafted since" options={[1995, 2000, 2005, 2010]} />
           <Chips value={minN} onChange={setMinN} label="Min. players" options={[10, 25, 50]} />
         </div>
-        <p className="muted" style={{ fontSize: 13, marginBottom: 8, maxWidth: '80ch' }}>
-          Ranked by average gap per player, pulled toward zero for small samples. Whiskers show a 95% interval.
-          When a whisker crosses the center line, the school isn’t clearly different from average.
-        </p>
-        <p className="meta" style={{ marginBottom: 16, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-          <span><i className="legend-dot" style={{ background: 'var(--over)' }} />clearly above average</span>
-          <span><i className="legend-dot" style={{ background: 'var(--ink-2)' }} />not clearly different</span>
-          <span><i className="legend-dot" style={{ background: 'var(--under)' }} />clearly below average</span>
-        </p>
+        <dl className="lab-key">
+          <div><dt>Beat their pick</dt><dd>Share of the school’s players who did better in the NFL than their draft pick predicted. 60% means 6 out of 10.</dd></div>
+          <div><dt>Avg. vs. pick</dt><dd>On average, how much better (+) or worse (−) they did than their pick predicted, in career value. +8 is about one good season.</dd></div>
+          <div><dt>The line</dt><dd>
+            <span className="key-dot" style={{ background: 'var(--over)' }} /> clearly better than expected ·{' '}
+            <span className="key-dot" style={{ background: 'var(--under)' }} /> clearly worse ·{' '}
+            <span className="key-dot" style={{ background: 'var(--ink-2)' }} /> about average, or not enough data. A longer line means less certain.
+          </dd></div>
+        </dl>
 
         <table className="rows">
-          <thead><tr><th>#</th><th>College</th><th className="r">Players</th><th className="r hide-s">Beat slot</th><th style={{ width: '38%' }} className="hide-s">Avg. gap per player (95% CI)</th><th className="r">Avg.</th></tr></thead>
+          <thead><tr><th>#</th><th>College</th><th className="r">Players</th><th className="r hide-s">Beat their pick</th><th style={{ width: '38%' }} className="hide-s">Better or worse than their pick</th><th className="r">Avg. vs. pick</th></tr></thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.name} className="link" onClick={() => (location.hash = `/lab/${encodeURIComponent(r.name)}${currentQuery()}`)}

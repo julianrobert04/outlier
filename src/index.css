@@ -350,3 +350,8 @@ sup.src { font-family: var(--mono); font-size: 9px; color: var(--ink-2); margin-
 .terms > div { min-width: 0; border-top: 1px solid var(--rule); padding-top: 10px; }
 .terms dt { font-weight: 650; font-size: 14px; }
 .terms dd { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.lab-key { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 32px; margin: 0 0 20px; }
+.lab-key > div { min-width: 0; }
+.lab-key dt { font-weight: 650; font-size: 13px; }
+.lab-key dd { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.key-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; }
