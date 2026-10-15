@@ -40,10 +40,10 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
 
   return (
     <div className="wrap" style={{ paddingTop: 56 }}>
-      <h1 className="h1">Who sends players<br />who outplay the slot?</h1>
+      <h1 className="h1">Whose players<br />beat their pick?</h1>
       <p className="lede" style={{ marginTop: 20 }}>
-        Counting NFL players rewards schools that sign the most talent. This asks a fairer question:
-        once the draft has priced a player in (or passed on him), do that school’s alumni beat the price?
+        Big schools send the most players to the NFL because they recruit the best players. So we ask a fairer question:
+        do a school’s players end up better or worse than where they were drafted?
       </p>
 
       <div className="section" style={{ marginTop: 48 }}>
