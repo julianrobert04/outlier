@@ -355,3 +355,11 @@ sup.src { font-family: var(--mono); font-size: 9px; color: var(--ink-2); margin-
 .lab-key dt { font-weight: 650; font-size: 13px; }
 .lab-key dd { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
 .key-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; }
+.terms-short { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-top: 12px; font-size: 13px; }
+.terms-short > div { display: flex; gap: 6px; min-width: 0; }
+.terms-short dt { font-weight: 650; }
+.terms-short dd { margin: 0; color: var(--ink-2); }
+.all-terms { margin-top: 10px; font-size: 13px; }
+.all-terms summary { cursor: pointer; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; width: fit-content; }
+.all-terms[open] summary { margin-bottom: 4px; }
+.terms-short dt { white-space: nowrap; }

@@ -1,4 +1,4 @@
-import { GROUP_NAME, oiLabel, gradeWord, times, type Dataset } from './data'
+import { oiLabel, gradeWord, type Dataset } from './data'
 import { playerHref } from './ui'
 
 // First thing a visitor reads: one worked example, then every term on the site.
@@ -21,30 +21,40 @@ export default function Glossary({ data, exampleId }: { data: Dataset; exampleId
     ['Early read', 'Players from the 2022+ classes, judged on pace so far and capped at .95. Active careers are capped at .97: they can still go down.'],
     ['W', 'A season taken from the player’s Wikipedia page, where the open stat sources don’t reach (NFL before 1999, older college seasons).'],
   ]
+  // The few terms a first-time visitor needs; everything else sits behind "All terms".
+  const key: [string, string][] = [
+    ['Outlier Index', 'The grade, .01 to .99. .99 is Hall-of-Fame level.'],
+    ['Career value', 'One number for a whole career, built from stats. A starter season ≈ 8–12.'],
+    ['Expected', 'What players taken at that pick usually produce.'],
+    ['Stars', 'High-school recruiting rating, 0–5★.'],
+    ['UDFA', 'Undrafted.'],
+  ]
   return (
     <section className="glossary" aria-labelledby="how-to-read">
       <h2 id="how-to-read" className="h3">How to read Outlier</h2>
       {p && p.m1 != null && (
         <p className="example-line">
-          <a href={playerHref(p)}><strong>{p.name}</strong></a>{' '}
-          was a <strong>{p.stars}★ recruit</strong> (only {Math.round((p.sDraftRate ?? 0) * 100)}% of {p.stars}★ {GROUP_NAME[p.grp].toLowerCase()} get drafted).
-          He went <strong>#{p.pick}</strong>, {times(p.m1)} the draft value a {p.stars}★ usually gets.
-          He then produced <strong>{p.av} career value</strong> against <strong>{p.exp.toFixed(0)} expected</strong> for pick #{p.pick} ({times(p.m2)}),
-          and his career beat {Math.min(99, Math.round(p.q * 100))}% of {GROUP_NAME[p.grp].toLowerCase()}.
-          Outlier Index: <strong className={p.oi >= 0.95 ? 'over' : ''}>{oiLabel(p.oi)} · {gradeWord(p.oi)}</strong>.
+          <a href={playerHref(p)}><strong>{p.name}</strong></a>: {p.stars}★ recruit → pick #{p.pick} → {p.av} career value vs {p.exp.toFixed(0)} expected →{' '}
+          <strong className={p.oi >= 0.95 ? 'over' : ''}>{oiLabel(p.oi)} {gradeWord(p.oi)}</strong>
         </p>
       )}
-      <dl className="terms">
-        {terms.map(([t, d]) => (
-          <div key={t}>
-            <dt>{t}</dt>
-            <dd>{d}</dd>
-          </div>
-        ))}
+      <dl className="terms-short">
+        {key.map(([t, d]) => <div key={t}><dt>{t}</dt><dd>{d}</dd></div>)}
       </dl>
-      <p className="meta" style={{ marginTop: 12 }}>
-        Grades: .99 legendary · .95+ great · .85+ very good · .70+ solid · .50+ as expected · .25+ below expectations · under .25 bust.{' '}
-        <a href="#/method" style={{ textDecoration: 'underline' }}>Full method →</a>
+      <details className="all-terms">
+        <summary>All terms</summary>
+        <dl className="terms">
+          {terms.map(([t, d]) => (
+            <div key={t}>
+              <dt>{t}</dt>
+              <dd>{d}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+      <p className="meta" style={{ marginTop: 10 }}>
+        .99 legendary · .95 great · .85 very good · .70 solid · .50 as expected · under .25 bust ·{' '}
+        <a href="#/method" style={{ textDecoration: 'underline' }}>How it works →</a>
       </p>
     </section>
   )
