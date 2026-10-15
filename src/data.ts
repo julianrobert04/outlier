@@ -7,6 +7,7 @@ export type Player = {
   team: string
   pos: string
   grp: Group
+  sub?: string // defensive backs: 'CB' or 'S' (ranked only against their own kind)
   college: string
   av: number
   exp: number
@@ -154,6 +155,10 @@ const RECRUIT_POS: Record<string, string> = {
   K: 'K', P: 'P', LS: 'LS',
 }
 export const recruitPosLabel = (p: string) => RECRUIT_POS[p] ?? p
+
+// The group a player's seasons are ranked in: corners and safeties separately.
+export const rankGroup = (p: { grp: Group; sub?: string }) =>
+  p.grp === 'DB' && p.sub === 'CB' ? 'cornerbacks' : p.grp === 'DB' && p.sub === 'S' ? 'safeties' : `${p.grp}s`
 
 // What a grade means, in words.
 export const GRADE_BANDS: [number, string][] = [

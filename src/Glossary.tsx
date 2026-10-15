@@ -13,7 +13,7 @@ export default function Glossary({ data, exampleId }: { data: Dataset; exampleId
     ['Draft multiplier', 'Draft value of the pick ÷ what recruits with the same stars usually get. ×12 means he went far higher than his rating predicted.'],
     ['Career multiplier', 'Career value ÷ what his draft slot usually produces. Below ×1 is a career that fell short: the higher the pick, the harder the grade drops.'],
     ['Career quality', 'How good the career was, balanced three ways: peak seasons, how often he ranked top 10 or top 20 at his position, and total career value plus honors. It sets the base grade.'],
-    ['Season rank', 'Where a season ranked at his position that year, by production: yards and touchdowns for skill players, sacks and tackles for loss for pass rushers, interceptions and passes defended for defensive backs.'],
+    ['Season rank', 'Where a season ranked at his position that year, using published standard formulas: ANY/A weights for quarterbacks, standard scoring for runners and receivers, standard IDP scoring for defenders. Corners and safeties are ranked separately.'],
     ['Honor points', 'Awards on a scale of prestige: MVP 30, Player of the Year 20, Hall of Fame 25, Super Bowl MVP 12, first-team All-Pro 10, Rookie of the Year 6, second-team All-Pro 4, Pro Bowl 2.'],
     ['Second contract', 'A multi-year deal signed after a player’s first contract: the market’s verdict on him. Shown as a share of that year’s salary cap so different eras compare. Data from OverTheCap, deals signed through 2022.'],
     ['Offensive linemen', 'Linemen have no individual stats, so their career quality uses seasons as a starter, their best second contract compared with the same line spot, and career value plus All-Pro and Pro Bowl honors.'],

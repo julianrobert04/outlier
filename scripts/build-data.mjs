@@ -182,8 +182,19 @@ async function buildSeasons(pfrToGsis) {
   const played = new Set((await load('games.csv'))
     .filter(g => g.game_type === 'REG')
     .flatMap(g => [`${g.season}|${g.week}|${g.home_team}`, `${g.season}|${g.week}|${g.away_team}`]))
+  // Where each defensive back lined up most (corner or safety), from every
+  // weekly depth-chart listing.
+  const dbSpots = new Map()
   for (const y of range(2001, 2024)) {
     for (const r of await load(`depth/${y}.csv`)) {
+      if (r.gsis_id && r.formation === 'Defense') {
+        const spot = /^(L|R)?CB$|^NB$|^NCB$/.test(r.depth_position) ? 'CB' : /^(SS|FS|S)$/.test(r.depth_position) ? 'S' : null
+        if (spot) {
+          const t = dbSpots.get(r.gsis_id) ?? { CB: 0, S: 0 }
+          t[spot]++
+          dbSpots.set(r.gsis_id, t)
+        }
+      }
       if (r.game_type !== 'REG' || r.depth_team !== '1' || !r.gsis_id) continue
       if (!played.has(`${y}|${Number(r.week)}|${r.club_code}`)) continue
       if (r.formation !== 'Offense' && r.formation !== 'Defense') continue
@@ -234,7 +245,7 @@ async function buildSeasons(pfrToGsis) {
       s.g = Math.max(s.g, s.snapG, s.gs)
     }
   }
-  return { seasons, snapSeasons }
+  return { seasons, snapSeasons, dbSpots }
 }
 
 function careerTotals(rows) {
@@ -307,6 +318,17 @@ function solve(A, b) {
   return M.map((r, i) => (r[i] ? r[n] / r[i] : 0))
 }
 
+// Sign constraints from football, not from the data: games, starts and
+// productive stats can only add value; turnovers (interceptions thrown) and
+// missed kicks can only subtract it. The data decides how much. Without this,
+// stats that rise together across a career (passing yards and touchdowns)
+// trade off against each other and one can come out negative.
+// One sign per feature after the intercept: base features first, then FEATURES[g].
+const SIGNS = {
+  base: ['+', '+', '+', '+'],
+  QB: ['+', '+', '-', '+'], RB: ['+', '+', '+', '+'], WR: ['+', '+', '+'], TE: ['+', '+', '+'], OL: [],
+  DL: ['+', '+', '+', '+'], LB: ['+', '+', '+', '+', '+'], DB: ['+', '+', '+', '+'], ST: ['+', '-'],
+}
 function fitAV(training) {
   const models = {}
   for (const g of Object.keys(FEATURES).filter(k => k !== 'base')) {
@@ -314,10 +336,21 @@ function fitAV(training) {
     if (rows.length < 30) continue
     const X = rows.map(p => featurize(p.totals, g)), y = rows.map(p => p.av)
     const k = X[0].length
-    const A = Array.from({ length: k }, (_, i) => Array.from({ length: k }, (_, j) =>
-      X.reduce((s, x) => s + x[i] * x[j], 0) + (i === j && i > 0 ? 1 : 0)))
-    const b = Array.from({ length: k }, (_, i) => X.reduce((s, x, n) => s + x[i] * y[n], 0))
-    const w = solve(A, b)
+    const signs = [null, ...SIGNS.base, ...SIGNS[g]]
+    // Active-set least squares: fit, drop the worst sign violation, refit.
+    let active = Array.from({ length: k }, (_, i) => i)
+    let w = Array(k).fill(0)
+    for (let iter = 0; iter < k; iter++) {
+      const A = active.map(i => active.map(j => X.reduce((s, x) => s + x[i] * x[j], 0) + (i === j && i > 0 ? 1 : 0)))
+      const b = active.map(i => X.reduce((s, x, n) => s + x[i] * y[n], 0))
+      const sol = solve(A, b)
+      w = Array(k).fill(0)
+      active.forEach((i, n) => { w[i] = sol[n] })
+      const bad = active.filter(i => (signs[i] === '+' && w[i] < 0) || (signs[i] === '-' && w[i] > 0))
+      if (!bad.length) break
+      const worst = bad.sort((a, c) => Math.abs(w[c]) - Math.abs(w[a]))[0]
+      active = active.filter(i => i !== worst)
+    }
     const pred = X.map(x => Math.max(0, x.reduce((s, v, i) => s + v * w[i], 0)))
     const mean = y.reduce((s, v) => s + v, 0) / y.length
     const ssr = y.reduce((s, v, i) => s + (v - pred[i]) ** 2, 0)
@@ -424,33 +457,46 @@ const careerMultiplier = p => (Math.max(p.av, 0) + 1) / (p.exp + 1)
 // Career quality: what the player actually produced, balanced three ways so
 // that lasting a long time isn't enough on its own:
 //   peak  (35%) — how his best three seasons ranked against his position that
-//                 season, by position-specific production (SEASON_PRODUCTION);
+//                 season, by position-specific production (SEASON_PRODUCTION, published formulas);
 //   elite (35%) — how often he was top 10 / top 20 at his position in a season;
 //   total (30%) — career value plus honor points.
 // Each part is a percentile within the position; the mix is ranked again.
 // Positions without box-score production (OL, specialists) use the total.
 // Careers still in progress are capped at ACTIVE_CAP.
 const ACTIVE_CAP = 0.97
-const n0 = x => Number(x || 0)
+// Season production uses published, standard formulas, not weights we chose:
+//   QB      — ANY/A's weights (Adjusted Net Yards per Attempt, Pro Football
+//             Reference): passing TD = 20 yards, INT = −45 yards; rushing on
+//             standard scoring (TD = 60 yards);
+//   RB/WR/TE — standard fantasy scoring in yards: TD = 60 yards, lost fumble = −20;
+//   DL/LB/DB — standard IDP scoring: solo tackle 1, assist 0.5, sack 2, TFL 1,
+//             INT 3, forced fumble 2, fumble recovery 2, pass defended 1,
+//             safety 2, defensive TD 6.
+// The same formula applies to every player at the position; seasons are
+// ranked within position and year.
+const PRODUCTION_GROUPS = new Set(['QB', 'RB', 'WR', 'TE', 'DL', 'LB', 'DB'])
+const n0 = x => (typeof x === 'number' ? x : 0)
+const IDP = s => n0(s.solo) + 0.5 * n0(s.ast) + 2 * n0(s.sk) + n0(s.tfl) + 3 * n0(s.dint) + 2 * n0(s.ff) +
+  2 * n0(s.fr) + n0(s.pd) + 2 * n0(s.sfty) + 6 * n0(s.dtd)
 const SEASON_PRODUCTION = {
-  QB: s => n0(s.pyd) + 20 * n0(s.ptd) - 45 * n0(s.int) + n0(s.ryd) + 20 * n0(s.rtd),
-  RB: s => n0(s.ryd) + n0(s.recyd) + 20 * (n0(s.rtd) + n0(s.rectd)),
-  WR: s => n0(s.recyd) + 20 * n0(s.rectd) + n0(s.ryd),
-  TE: s => n0(s.recyd) + 20 * n0(s.rectd),
-  DL: s => 20 * n0(s.sk) + 8 * n0(s.tfl) + 5 * n0(s.qbh) + n0(s.solo) + 10 * n0(s.ff),
-  LB: s => n0(s.solo) + 0.5 * n0(s.ast) + 15 * n0(s.sk) + 6 * n0(s.tfl) + 20 * n0(s.dint) + 5 * n0(s.pd) + 10 * n0(s.ff),
-  DB: s => 25 * n0(s.dint) + 8 * n0(s.pd) + n0(s.solo) + 10 * n0(s.ff),
+  QB: s => n0(s.pyd) + 20 * n0(s.ptd) - 45 * n0(s.int) + n0(s.ryd) + 60 * n0(s.rtd) - 20 * n0(s.fuml),
+  RB: s => n0(s.ryd) + n0(s.recyd) + 60 * (n0(s.rtd) + n0(s.rectd)) - 20 * n0(s.fuml),
+  WR: s => n0(s.recyd) + n0(s.ryd) + 60 * (n0(s.rectd) + n0(s.rtd)) - 20 * n0(s.fuml),
+  TE: s => n0(s.recyd) + 60 * n0(s.rectd) - 20 * n0(s.fuml),
+  DL: IDP, LB: IDP, DB: IDP,
 }
-function careerQuality(players) {
+function seasonProduction(models, p, s) {
+  return SEASON_PRODUCTION[p.grp] ? SEASON_PRODUCTION[p.grp](s) : 0
+}
+function careerQuality(players, models) {
   // Season ranks within position.
   const seasons = new Map()
   for (const p of players) {
-    const f = SEASON_PRODUCTION[p.grp]
-    if (!f) continue
+    if (!PRODUCTION_GROUPS.has(p.grp)) continue
     for (const s of p.rows) {
       if (!(s.g > 0)) continue
-      const k = `${p.grp}|${s.season}`
-      seasons.set(k, [...(seasons.get(k) ?? []), { p, v: f(s) }])
+      const k = `${p.grp}${p.sub ?? ''}|${s.season}`
+      seasons.set(k, [...(seasons.get(k) ?? []), { p, v: seasonProduction(models, p, s) }])
     }
   }
   for (const p of players) { p.seasonRanks = []; p.seasonPcts = [] }
@@ -473,8 +519,10 @@ function careerQuality(players) {
   // Percentiles within position, among players who played (completed or long careers).
   const sortedBy = (list, f) => list.map(f).sort((a, b) => a - b)
   const byGrp = new Map()
-  for (const p of players) if (!p.young && p.games > 0) byGrp.set(p.grp, [...(byGrp.get(p.grp) ?? []), p])
-  for (const [g, pool] of byGrp) {
+  const poolKey = p => p.grp + (p.sub ?? '')
+  for (const p of players) if (!p.young && p.games > 0) byGrp.set(poolKey(p), [...(byGrp.get(poolKey(p)) ?? []), p])
+  for (const [key, pool] of byGrp) {
+    const g = pool[0].grp
     const tot = sortedBy(pool, p => p.totalVal)
     if (g === 'OL') {
       // Linemen: starter longevity (30%), the market's verdict — best second
@@ -494,17 +542,21 @@ function careerQuality(players) {
           : 0.35 * a + 0.65 * t
       }
       const mixed = sortedBy(pool, mix)
-      for (const p of players) if (p.grp === g) p.q = p.games > 0 ? midRankSorted(mixed, mix(p)) : 0
+      for (const p of players) if (poolKey(p) === key) p.q = p.games > 0 ? midRankSorted(mixed, mix(p)) : 0
       continue
     }
-    if (!SEASON_PRODUCTION[g]) {
-      for (const p of players) if (p.grp === g) p.q = p.games > 0 ? midRankSorted(tot, p.totalVal) : 0
+    if (!PRODUCTION_GROUPS.has(g)) {
+      for (const p of players) if (poolKey(p) === key) p.q = p.games > 0 ? midRankSorted(tot, p.totalVal) : 0
       continue
     }
     const peak = sortedBy(pool, p => p.peakVal), elite = sortedBy(pool, p => p.eliteVal)
-    const mix = p => 0.35 * midRankSorted(peak, p.peakVal) + 0.35 * midRankSorted(elite, p.eliteVal) + 0.30 * midRankSorted(tot, p.totalVal)
+    // Box scores can't see coverage (a shutdown corner makes few tackles because
+    // few passes come his way), so for defensive backs the public judgment of
+    // the job — career value plus All-Pro/Pro Bowl honors — carries half the weight.
+    const w = g === 'DB' ? [0.25, 0.25, 0.50] : [0.35, 0.35, 0.30]
+    const mix = p => w[0] * midRankSorted(peak, p.peakVal) + w[1] * midRankSorted(elite, p.eliteVal) + w[2] * midRankSorted(tot, p.totalVal)
     const mixed = sortedBy(pool, mix)
-    for (const p of players) if (p.grp === g) p.q = p.games > 0 ? midRankSorted(mixed, mix(p)) : 0
+    for (const p of players) if (poolKey(p) === key) p.q = p.games > 0 ? midRankSorted(mixed, mix(p)) : 0
   }
 }
 function midRankSorted(sorted, x) {
@@ -903,7 +955,8 @@ async function main() {
   const picks = await load('draft_picks.csv')
   const registry = await load('players.csv')
   const pfrToGsis = new Map(registry.filter(r => r.pfr_id && r.gsis_id).map(r => [r.pfr_id, r.gsis_id]))
-  const { seasons, snapSeasons } = await buildSeasons(pfrToGsis)
+  const { seasons, snapSeasons, dbSpots } = await buildSeasons(pfrToGsis)
+  const registryPos = new Map(registry.filter(r => r.gsis_id).map(r => [r.gsis_id, r.position]))
   const seasonRows = id => [...(seasons.get(id)?.values() ?? [])].filter(s => s.g > 0 || s.gs > 0).sort((a, b) => a.season - b.season)
 
   // Drafted players: PFR's real AV and honors.
@@ -953,6 +1006,14 @@ async function main() {
     })
   }
 
+  // Corners and safeties are compared only with their own kind.
+  for (const p of players) {
+    if (p.grp !== 'DB') continue
+    const t = dbSpots.get(p.gsis)
+    const reg = registryPos.get(p.gsis) ?? p.pos
+    p.sub = t && t.CB + t.S > 0 ? (t.CB >= t.S ? 'CB' : 'S')
+      : reg === 'CB' || p.pos === 'CB' ? 'CB' : /^(S|SS|FS|SAF)$/.test(reg) || /^(S|SS|FS|SAF)$/.test(p.pos) ? 'S' : 'DB'
+  }
   for (const p of players) {
     p.seasons = p.to ? p.to - p.year + 1 : 0
     p.active = p.to >= LAST_SEASON ? 1 : 0
@@ -986,7 +1047,7 @@ async function main() {
   const recruited = await outlierIndex(players)
   const honored = await linkHonors(players)
   const contracted = await linkContracts(players, registry)
-  careerQuality(players)
+  careerQuality(players, models)
   for (const p of players) p.oi = finalGrade(p)
   const collegeLinked = await linkCollege(players)
   for (const p of players) { p.cpct ??= null; p.cseasons = p.collegeRows?.length ?? 0 }
@@ -1007,7 +1068,7 @@ async function main() {
   }
   await Promise.all(cshards.map((s, i) => writeFile(`${OUT}/college/${i}.json`, JSON.stringify(s))))
 
-  const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
+  const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'sub', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
     'preEra', 'oi', 'raw', 'm1', 'm2', 'mult', 'base', 'climbAdd', 'fallFactor', 'q', 'top10', 'top20', 'bestRank', 'starterSeasons', 'secondContract', 'bestCap', 'bestDeal', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']

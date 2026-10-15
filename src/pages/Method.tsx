@@ -105,9 +105,12 @@ export default function MethodPage({ data }: { data: Dataset }) {
         <p>
           <strong>Career quality is balanced three ways</strong> so that lasting a long time isn’t enough on its own: peak (35%, how his best
           three seasons ranked at his position by production that year), elite seasons (35%, top-10 and top-20 finishes at his position) and total
-          (30%, career value plus honor points). Season production is position-specific: passing yards, TDs and INTs for QBs; scrimmage yards and TDs
-          for backs and receivers; sacks, TFL and QB hits for the defensive line; tackles, sacks, TFL and takeaways for linebackers; interceptions and
-          passes defended for defensive backs. Offensive linemen have no individual production stats, so theirs is 30% seasons as a primary starter, 20% best second contract
+          (30%, career value plus honor points). Season production uses published, standard formulas rather than weights we picked: ANY/A’s weights for quarterbacks
+          (passing TD = 20 yards, interception = −45 yards, from Pro Football Reference’s Adjusted Net Yards per Attempt) with rushing on standard scoring;
+          standard scoring for runners and receivers (TD = 60 yards, lost fumble = −20); standard IDP scoring for every defender (solo tackle 1, assist 0.5,
+          sack 2, tackle for loss 1, interception 3, forced fumble 2, fumble recovery 2, pass defended 1, safety 2, touchdown 6). Corners and safeties are
+          ranked only against their own kind (from where they lined up on weekly depth charts), and because box scores can’t see coverage, a defensive back’s
+          career value plus honors carries half of his career quality. Offensive linemen have no individual production stats, so theirs is 30% seasons as a primary starter, 20% best second contract
           (average per year as a share of the salary cap, compared within the same line spot, since centers are paid less than tackles; OverTheCap data via
           nflverse, deals signed through 2022) and 50% career value plus honors, where All-Pro teams are the clearest public judgment of a lineman.
           When a player’s contract history isn’t known, that part is left out rather than scored zero. Specialists use the total only.

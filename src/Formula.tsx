@@ -1,4 +1,4 @@
-import { dealLabel, GRADE_BANDS, GROUP_NAME, gradeWord, oiLabel, shortPick, times, type Dataset, type Player } from './data'
+import { dealLabel, rankGroup, GRADE_BANDS, GROUP_NAME, gradeWord, oiLabel, shortPick, times, type Dataset, type Player } from './data'
 import { playerHref } from './ui'
 
 // The Outlier Index explained with a player's own numbers: career first,
@@ -14,7 +14,7 @@ function draftSentence(p: Player) {
 }
 
 export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
-  const pos = GROUP_NAME[p.grp].toLowerCase()
+  const pos = p.grp === 'DB' && p.sub && p.sub !== 'DB' ? rankGroup(p) : GROUP_NAME[p.grp].toLowerCase()
   const fell = p.m2 < 1
   return (
     <ol className="stages">
@@ -27,7 +27,7 @@ export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
                 {p.grp === 'OL'
                   ? <><strong>{p.starterSeasons}</strong> seasons as a starter. {p.bestDeal ? <>Best second contract: {dealLabel(p)}. </> : null}</>
                   : p.bestRank != null
-                    ? <>Best season ranked <strong>No. {p.bestRank}</strong> among {p.grp}s; <strong>{p.top10}</strong> top-10 and <strong>{p.top20}</strong> top-20 seasons. </>
+                    ? <>Best season ranked <strong>No. {p.bestRank}</strong> among {rankGroup(p)}; <strong>{p.top10}</strong> top-10 and <strong>{p.top20}</strong> top-20 seasons. </>
                     : null}
                 {p.av} career value{p.est ? ' (estimated)' : ''}{p.honorPoints ? ` + ${p.honorPoints} honor points` : ''}.
                 {' '}Overall, better than {pct(p.q)} of {pos} who played since {data.model.firstClass}{p.active ? ', and still counting' : ''}. This sets the base grade.
