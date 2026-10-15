@@ -110,7 +110,7 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         <h2 className="h3" style={{ marginBottom: 16 }}>How {p.name.split(' ')[0]}’s grade is built</h2>
         <StageSentences p={p} data={data} />
         <p className="meta" style={{ marginTop: 16 }}>
-          Each step is a multiplier: how many times the usual outcome. The draft counts half, the career fully, and a falling career twice.
+          How good the career was sets the base; beating expectations lifts it, falling short of the draft slot lowers it.
           {' '}<a href="#/method" style={{ textDecoration: 'underline' }}>Full method →</a>
         </p>
       </section>
@@ -225,7 +225,7 @@ function collegeLine(p: Player, d: Dataset) {
   return `One of ${n.toLocaleString()} ${p.college} players in the NFL since ${d.model.firstClass}`
 }
 
-// One sentence that matches the grade (the ladder of expectations).
+// One sentence that matches the grade.
 function verdict(p: Player) {
   const g = p.oi
   if (!p.games) return p.young ? 'Hasn’t played a regular-season game yet.' : `${p.pick ? `Drafted #${p.pick}` : 'Went undrafted'}, never played a regular-season game.`

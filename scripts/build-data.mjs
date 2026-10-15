@@ -407,17 +407,8 @@ function archetype(p) {
 }
 
 // ── Outlier Index ──────────────────────────────────────────────────────────
-// One number, .01 to .99: a ladder of expectations. Each step is a multiplier.
-//   draft multiplier  = draft value of the slot ÷ what recruits with the same
-//                       stars and position usually get (stars → draft)
-//   career multiplier = NFL career value ÷ what that draft slot usually
-//                       produces (draft → career)
-// M = √(draft multiplier) × career multiplier, and a falling career counts
-// double (squared below 1): the draft counts half, the career fully, a
-// collapse twice. Without a star rating the draft multiplier is 1. The grade
-// is M^GRADE_CURVE / (M^GRADE_CURVE + 1): .50 means exactly as expected, and
-// .99 takes about a 21× climb. The career-quality ceiling and elite tier (below)
-// anchor the top to real careers; active careers are capped at ACTIVE_CAP.
+// One number, .01 to .99. The draft multiplier (stars → draft) is computed
+// below; career quality and the final grade further down.
 
 const RECRUIT_GROUP = {
   PRO: 'QB', DUAL: 'QB', QB: 'QB', RB: 'RB', APB: 'RB', FB: 'RB', WR: 'WR', TE: 'TE',
@@ -427,19 +418,10 @@ const RECRUIT_GROUP = {
 }
 // An early read can't reach the top of the scale until the career has run.
 const EARLY_CAP = 0.95
-const GRADE_CURVE = 1.5
 const careerMultiplier = p => (Math.max(p.av, 0) + 1) / (p.exp + 1)
-// Career quality: what the player actually produced. Total career value
-// (built from his stats) as a percentile among everyone at the position who
-// played. It is half of the grade:
-//   grade = √(ladder grade × quality grade), quality grade = quality^QUALITY_POWER
-// so a big climb with a modest career lands in the middle (better than 75% of
-// QBs → .19 quality grade). Elite careers (top ELITE_FROM of a position) also
-// grade high on their own even when expected, and the top ELITE_TOP is .99.
-// Careers still in progress are capped at ACTIVE_CAP: they can still go down.
-const ELITE_TOP = 0.995
-const ELITE_FROM = 0.98
-const QUALITY_POWER = 6
+// Career quality: what the player actually produced. Total career value (from
+// his stats) plus honor points, as a percentile among everyone at the
+// position who played. Careers still in progress are capped at ACTIVE_CAP.
 const ACTIVE_CAP = 0.97
 function careerQuality(players) {
   const pools = new Map()
@@ -458,20 +440,40 @@ function midRankSorted(sorted, x) {
   while (eq < sorted.length && sorted[eq] === x) eq++
   return (lo + (eq - lo) / 2) / sorted.length
 }
-const eliteGrade = q => (q >= ELITE_TOP ? 0.99 : q >= ELITE_FROM ? 0.95 + ((q - ELITE_FROM) / (ELITE_TOP - ELITE_FROM)) * 0.039 : 0)
-const qualityGrade = q => (q >= ELITE_TOP ? 0.995 : Math.pow(q, QUALITY_POWER))
+// Career first, expectations second (the user's design):
+//   1. base: how good the career was. Career quality (value + honor points,
+//      percentile within position) mapped through CAREER_ANCHORS: Hall-of-Fame
+//      level .99, Pro Bowl level .90s, solid starter .80s, role player .50s.
+//   2. climb: beating expectations moves the grade up to CLIMB_SHARE of the
+//      way to .99. Climb = √(draft multiplier) × career multiplier.
+//   3. fall: a career short of its draft slot multiplies the grade by
+//      career multiplier ^ (expected value ÷ BUST_SCALE), so the higher the
+//      expectation, the harder the drop (JaMarcus Russell .01; a 7th-rounder
+//      who barely played loses little).
+const CAREER_ANCHORS = [[0, 0.30], [0.3, 0.38], [0.6, 0.50], [0.8, 0.62], [0.9, 0.74], [0.95, 0.82], [0.98, 0.92], [0.995, 0.99], [1, 0.99]]
+const CLIMB_SHARE = 0.25
+const BUST_SCALE = 40
+function careerGrade(q) {
+  for (let i = 1; i < CAREER_ANCHORS.length; i++) {
+    const [x1, y1] = CAREER_ANCHORS[i - 1], [x2, y2] = CAREER_ANCHORS[i]
+    if (q <= x2) return y1 + ((y2 - y1) * (q - x1)) / (x2 - x1)
+  }
+  return 0.99
+}
 function finalGrade(p) {
   const career = careerMultiplier(p)
-  const m = Math.sqrt(p.m1 ?? 1) * (career < 1 ? career * career : career)
-  const x = Math.pow(m, GRADE_CURVE)
+  const climb = Math.sqrt(p.m1 ?? 1) * career
   p.m2 = career
-  p.mult = m
-  p.ladder = gradeOI(x / (x + 1))
-  p.qgrade = p.games ? qualityGrade(p.q) : 0.0001
-  const blended = gradeOI(Math.sqrt(Math.max(x / (x + 1), 0.0001) * p.qgrade))
-  // Elite route: only when the ladder didn't collapse (a #1 pick who was merely long-lived isn't elite).
-  const elite = p.ladder >= 0.5 && eliteGrade(p.q) ? gradeOI(eliteGrade(p.q)) : 0
-  let oi = Math.max(blended, elite)
+  p.mult = climb
+  const base = p.games ? careerGrade(p.q) : CAREER_ANCHORS[0][1]
+  let g = base
+  if (climb > 1) g += (0.99 - g) * CLIMB_SHARE * (1 - 1 / climb)
+  const afterClimb = g
+  if (career < 1) g *= Math.pow(career, Math.max(p.exp, 1) / BUST_SCALE)
+  p.base = gradeOI(base)
+  p.climbAdd = Math.round((afterClimb - base) * 1000) / 1000
+  p.fallFactor = career < 1 ? Math.round(Math.pow(career, Math.max(p.exp, 1) / BUST_SCALE) * 1000) / 1000 : 1
+  let oi = gradeOI(g)
   if (p.active) oi = Math.min(oi, ACTIVE_CAP)
   if (p.young) oi = Math.min(oi, EARLY_CAP)
   return oi
@@ -892,9 +894,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'preEra', 'oi', 'm1', 'm2', 'mult', 'ladder', 'q', 'qgrade', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+    'preEra', 'oi', 'm1', 'm2', 'mult', 'base', 'climbAdd', 'fallFactor', 'q', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
   // Recruiting fields stay null when there is no link: null means "unknown", never 0.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' || f === 'qgrade' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear'].includes(f) ? v ?? null : v ?? 0)
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({
@@ -903,7 +905,7 @@ async function main() {
     lastSeason: LAST_SEASON,
     model: {
       bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: SCOPE_FROM, recruitingFrom: FIRST_CLASS, historyFrom: HISTORY_FROM, statsFrom: STATS_FROM, lastClass: LAST_CLASS,
-      youngFrom: YOUNG_FROM, gradeCurve: GRADE_CURVE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, eliteTop: ELITE_TOP, eliteFrom: ELITE_FROM, qualityPower: QUALITY_POWER, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
+      youngFrom: YOUNG_FROM, careerAnchors: CAREER_ANCHORS, climbShare: CLIMB_SHARE, bustScale: BUST_SCALE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,

@@ -35,9 +35,10 @@ export type Player = {
   m1: number | null // draft multiplier: draft value ÷ usual for the star rating
   m2: number // career multiplier: career value ÷ usual for the draft slot
   mult: number // combined multiplier behind the grade
-  ladder: number // grade from the ladder alone
-  q: number // career quality: career value percentile within position
-  qgrade: number // career quality on the steep scale (quality^6)
+  q: number // career quality: (career value + honor points) percentile within position
+  base: number // grade from career quality alone
+  climbAdd: number // added for beating expectations
+  fallFactor: number // multiplier for falling short of the draft slot (1 = none)
   ap2: number // second-team All-Pro selections
   awards: string // "mvp:2007;dpoy:2008" — major awards with seasons
   honorPoints: number // career-value points added for honors, on a scale of prestige
@@ -71,7 +72,7 @@ export type Dataset = {
   recruitingLinked: number
   model: {
     bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; recruitingFrom: number; historyFrom: number; statsFrom: number; lastClass: number
-    youngFrom: number; gradeCurve: number; earlyCap: number; activeCap: number; eliteTop: number; eliteFrom: number; qualityPower: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
+    youngFrom: number; careerAnchors: [number, number][]; climbShare: number; bustScale: number; earlyCap: number; activeCap: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]
   collegeCols: string[]

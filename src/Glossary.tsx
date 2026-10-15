@@ -5,14 +5,14 @@ import { playerHref } from './ui'
 export default function Glossary({ data, exampleId }: { data: Dataset; exampleId: string }) {
   const p = data.byId.get(exampleId)
   const terms: [string, string][] = [
-    ['Outlier Index', 'The grade, from .01 to .99. How far a career rose above (or fell below) what was expected of it, and how good it actually was. .50 means exactly as expected.'],
+    ['Outlier Index', 'The grade, from .01 to .99. How good the career was, lifted for beating expectations and lowered for falling short of them. .99 is Hall-of-Fame level.'],
     ['Career value (AV)', 'Pro Football Reference’s Approximate Value: one number for a whole career, built from the player’s stats and role, so a guard and a quarterback can be compared. A strong starter season is about 8–12.'],
     ['Expected career value', 'The average career value of players at the same position, drafted near the same pick, in nearby draft years. A #1 pick is expected to reach about 63; pick #100 about 15; an undrafted player about 4.'],
     ['Gap', 'Actual career value minus expected. +90 means 90 points more than his draft slot usually produces.'],
     ['Stars · 247 Composite', 'The high-school recruiting rating (0–5★), averaged across the major recruiting services by 247Sports. Available from the 2000 recruiting class.'],
     ['Draft multiplier', 'Draft value of the pick ÷ what recruits with the same stars usually get. ×12 means he went far higher than his rating predicted.'],
-    ['Career multiplier', 'Career value ÷ what his draft slot usually produces. Below ×1 is a career that fell short, and it counts double.'],
-    ['Career quality', 'Career value plus honor points, ranked against everyone at the position. The numbers count, not only the expectations.'],
+    ['Career multiplier', 'Career value ÷ what his draft slot usually produces. Below ×1 is a career that fell short: the higher the pick, the harder the grade drops.'],
+    ['Career quality', 'Career value plus honor points, ranked against everyone at the position. It sets the base grade: the numbers count first, expectations second.'],
     ['Honor points', 'Awards on a scale of prestige: MVP 30, Player of the Year 20, Hall of Fame 25, Super Bowl MVP 12, first-team All-Pro 10, Rookie of the Year 6, second-team All-Pro 4, Pro Bowl 2.'],
     ['UDFA', 'Undrafted free agent: signed after the draft. Their career value is estimated from their stats.'],
     ['Early read', 'Players from the 2022+ classes, judged on pace so far and capped at .95. Active careers are capped at .97: they can still go down.'],
