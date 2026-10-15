@@ -341,3 +341,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .recruit-stars { color: var(--ink); letter-spacing: 0.08em; margin-right: 4px; font-size: 15px; }
 .recruit-stars .faint { color: var(--rule); }
 sup.src { font-family: var(--mono); font-size: 9px; color: var(--ink-2); margin-left: 3px; border: 1px solid var(--rule); padding: 0 2px; vertical-align: 4px; }
+
+/* ── Glossary (top of Home) ───────────────────────── */
+.glossary { border-top: 2px solid var(--ink); padding-top: 16px; }
+.example-line { margin-top: 12px; font-size: 16px; line-height: 1.6; max-width: 80ch; }
+.example-line a { text-decoration: underline; text-underline-offset: 3px; }
+.terms { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px 32px; margin-top: 24px; }
+.terms > div { min-width: 0; border-top: 1px solid var(--rule); padding-top: 10px; }
+.terms dt { font-weight: 650; font-size: 14px; }
+.terms dd { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.5; }

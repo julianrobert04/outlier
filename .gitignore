@@ -26,3 +26,4 @@ data/raw/
 .impeccable/live/
 .env
 .env.local
+dist-artifact/

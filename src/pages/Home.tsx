@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { accolades, gap, GROUPS, oiLabel, rankLabel, shortPick, type Dataset, type Group, type Player } from '../data'
 import Scatter from '../Scatter'
 import { FormulaExplainer } from '../Formula'
+import Glossary from '../Glossary'
 import { Chips, GapNum, OI, playerHref } from '../ui'
 
 const touch = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches
@@ -40,6 +41,10 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
           </button>
         </div>
       </section>
+
+      <div className="wrap" style={{ paddingBottom: 40 }}>
+        <Glossary data={data} exampleId="KelcTr00" />
+      </div>
 
       <section className="wrap" style={{ paddingBottom: 56 }}>
         <div className="controls" style={{ justifyContent: 'space-between' }}>
