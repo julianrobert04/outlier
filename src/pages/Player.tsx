@@ -112,7 +112,8 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         <ol className="journey">
           <Stage n="01" title="High school"
             main={p.from === 'recruit' ? `${'★'.repeat(p.stars)}${'☆'.repeat(5 - p.stars)}` : '—'}
-            sub={p.from === 'recruit' ? `247 composite ${p.rating.toFixed(4)}` : 'Recruiting rating not linked yet'} />
+            sub={p.from === 'recruit' ? `247 composite ${p.rating.toFixed(4)}`
+              : p.year - 3 < data.model.recruitingFrom ? `Ratings start with the ${data.model.recruitingFrom} recruiting class` : 'No recruiting rating on record'} />
           <Stage n="02" title="College" main={p.college || '—'}
             sub={p.cpct != null
               ? `College production beat ${Math.round(p.cpct * 100)}% of NFL ${GROUP_NAME[p.grp].toLowerCase()}`
@@ -156,7 +157,9 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         <h2 className="h3" style={{ marginBottom: 24 }}>Season by season <span className="muted" style={{ fontWeight: 400 }}>· NFL regular season</span></h2>
         {seasons === null ? <p className="faint mono" style={{ fontSize: 12 }}>loading…</p>
           : seasons.length ? <SeasonTable grp={p.grp} rows={seasons} data={data} />
-            : <p className="faint">No regular-season games on record.</p>}
+            : <p className="faint">{p.preEra && p.to && p.to < data.model.statsFrom ? `This career ended before ${data.model.statsFrom}, when season-by-season stats begin.` : 'No regular-season games on record.'}</p>}
+        {seasons && seasons.length > 0 && p.preEra && p.year < data.model.statsFrom &&
+          <p className="meta" style={{ marginTop: 8 }}>Seasons before {data.model.statsFrom} aren’t in the source; they still count in career value and honors.</p>}
         <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>
           GS = games started: first string on the weekly depth chart ({data.coverage.startsFrom.depthCharts[0]}–{data.coverage.startsFrom.depthCharts[data.coverage.startsFrom.depthCharts.length - 1]})
           or at least 50% of snaps ({data.coverage.startsFrom.snapCounts[0]}+). Before {data.coverage.startsFrom.snapCounts[0]}, games for players without

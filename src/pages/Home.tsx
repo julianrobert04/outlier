@@ -51,7 +51,7 @@ export default function Home({ data, onSearch }: { data: Dataset; onSearch: () =
         </div>
         <Scatter players={players} labels={labels} height={Math.min(560, Math.max(380, window.innerHeight * 0.6))} />
         <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>
-          Each dot is one player who entered the league {data.model.firstClass}–{data.model.lastJudgedClass}; undrafted players sit in the right-hand column (value estimated). The line is what a pick at that slot usually becomes. {touch ? 'Tap a dot to read it; tap again to open.' : 'Hover to read, click to open.'}
+          Each dot is one player who entered the league {data.model.firstClass}–{data.model.lastJudgedClass} (undrafted players from 1999 on); undrafted players sit in the right-hand column (value estimated). The line is what a pick at that slot usually becomes. {touch ? 'Tap a dot to read it; tap again to open.' : 'Hover to read, click to open.'}
         </p>
       </section>
 

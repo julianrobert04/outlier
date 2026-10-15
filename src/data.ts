@@ -26,6 +26,7 @@ export type Player = {
   to: number
   active: number
   young: number // 1 = early-career track (2022+ classes)
+  preEra: number // entered before 2000: some seasons predate the stat sources
   classRank: number
   posRank: number
   dna: string
@@ -65,7 +66,7 @@ export type Dataset = {
   lastSeason: number
   recruitingLinked: number
   model: {
-    bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; lastClass: number
+    bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; recruitingFrom: number; historyFrom: number; statsFrom: number; lastClass: number
     youngFrom: number; gradeCurve: number; earlyCap: number; activeCap: number; eliteTop: number; eliteFrom: number; qualityPower: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]

@@ -22,7 +22,9 @@ const BASE = 'https://github.com/nflverse/nflverse-data/releases/download'
 const RAW = 'data/raw'
 const OUT = 'public/data'
 
-const FIRST_CLASS = 2000 // modern era; also when recruiting ratings begin
+const FIRST_CLASS = 2000 // the era: everyone who played from 2000 on; also when recruiting ratings begin
+const HISTORY_FROM = 1985 // older draft classes, for fair expectations and players who were still active in 2000
+const STATS_FROM = 1999 // first season of nflverse season stats
 const LAST_CLASS = 2025 // most recent class with NFL games played
 const YOUNG_FROM = 2022 // 2022+ classes: early-career track
 const LAST_SEASON = Number(process.env.OUTLIER_LAST_SEASON ?? new Date().getFullYear())
@@ -67,7 +69,7 @@ function sources() {
   return [
     ['draft_picks/draft_picks.csv', 'draft_picks.csv'],
     ['players/players.csv', 'players.csv'],
-    ...range(FIRST_CLASS, LAST_SEASON).map(y => [`stats_player/stats_player_reg_${y}.csv`, `stats/${y}.csv`]),
+    ...range(STATS_FROM, LAST_SEASON).map(y => [`stats_player/stats_player_reg_${y}.csv`, `stats/${y}.csv`]),
     ...range(2001, 2024).map(y => [`depth_charts/depth_charts_${y}.csv`, `depth/${y}.csv`]),
     ...range(2012, LAST_SEASON).map(y => [`snap_counts/snap_counts_${y}.csv`, `snaps/${y}.csv`]),
     ...['def', 'rush', 'rec', 'pass'].map(t => [`pfr_advstats/advstats_season_${t}.csv`, `adv/${t}.csv`]),
@@ -136,7 +138,7 @@ async function buildSeasons(pfrToGsis) {
     if (!m.has(y)) m.set(y, { season: y, team: '', g: 0, gs: 0, snapG: 0, snapGS: 0, depthGS: new Set(), ...Object.fromEntries([...Object.keys(STAT_MAP), ...EXTRA].map(k => [k, 0])) })
     return m.get(y)
   }
-  for (const y of range(FIRST_CLASS, LAST_SEASON)) {
+  for (const y of range(STATS_FROM, LAST_SEASON)) {
     for (const r of await load(`stats/${y}.csv`)) {
       if (!r.player_id) continue
       const s = row(r.player_id, y)
@@ -604,7 +606,7 @@ async function linkHonors(players) {
   }
   let found = 0
   // Season pages: Pro Bowl rosters and All-Pro teams.
-  for (let y = FIRST_CLASS; y <= LAST_SEASON; y++) {
+  for (let y = HISTORY_FROM; y <= LAST_SEASON; y++) {
     if (!existsSync(`${dir}/${y}.json`)) continue
     const { proBowl, allPro } = JSON.parse(await readFile(`${dir}/${y}.json`, 'utf8'))
     const pbNames = new Set([...proBowl.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]/g)].map(m => m[1]))
@@ -631,7 +633,7 @@ async function linkHonors(players) {
       const ym = first.match(/\[\[(\d{4}) NFL season/)
       if (!ym) continue
       const season = Number(ym[1])
-      if (season < FIRST_CLASS || season > LAST_SEASON) continue
+      if (season < HISTORY_FROM || season > LAST_SEASON) continue
       for (const n of rowNames(row)) { const p = who(n, season); if (p) { give(p, key, season); break } }
     }
   }
@@ -732,8 +734,8 @@ async function main() {
 
   // Drafted players: PFR's real AV and honors.
   const draftedIds = new Set()
-  const players = picks
-    .filter(r => GROUP[r.position] && num(r.season) >= FIRST_CLASS && num(r.season) <= LAST_CLASS)
+  let players = picks
+    .filter(r => GROUP[r.position] && num(r.season) >= HISTORY_FROM && num(r.season) <= LAST_CLASS)
     .map(r => {
       const year = num(r.season), to = num(r.to)
       const gsis = r.gsis_id || pfrToGsis.get(r.pfr_player_id) || ''
@@ -757,7 +759,9 @@ async function main() {
   // range without being drafted.
   for (const r of registry) {
     const year = num(r.rookie_season)
-    if (r.draft_round || !GROUP[r.position] || year < FIRST_CLASS || year > LAST_CLASS) continue
+    if (r.draft_round || !GROUP[r.position] || year > LAST_CLASS) continue
+    // Undrafted players from before 2000 count if they have season stats (1999+).
+    if (year < FIRST_CLASS && (year < HISTORY_FROM || num(r.last_season) < STATS_FROM)) continue
     if (draftedIds.has(r.gsis_id) || draftedIds.has(r.pfr_id)) continue
     const rows = seasonRows(r.gsis_id).filter(s => s.season >= year)
     const totals = careerTotals(rows)
@@ -783,12 +787,20 @@ async function main() {
   }
 
   // Estimate AV for undrafted players from a model trained on drafted ones.
-  const models = fitAV(players.filter(p => p.pick && !p.young && p.gsis && p.rows.length))
+  // Trained on era classes only: older careers are missing pre-1999 season stats.
+  const models = fitAV(players.filter(p => p.pick && !p.young && p.year >= FIRST_CLASS && p.gsis && p.rows.length))
   for (const p of players) if (p.est && models[p.grp]) p.av = predictAV(models[p.grp], p.totals, p.grp)
 
-  const byGroup = new Map()
+  // Expectations use every pick from the older classes (no survivorship bias)…
+  let byGroup = new Map()
   for (const p of players) byGroup.set(p.grp, [...(byGroup.get(p.grp) ?? []), p])
   for (const p of players) Object.assign(p, expectation(p, byGroup.get(p.grp)))
+  // …then the site keeps every drafted player from HISTORY_FROM on, and undrafted
+  // players with season stats (their career value is estimated from them).
+  players = players.filter(p => p.pick > 0 || p.year >= FIRST_CLASS || p.to >= STATS_FROM)
+  for (const p of players) p.preEra = p.year < FIRST_CLASS ? 1 : 0
+  byGroup = new Map()
+  for (const p of players) byGroup.set(p.grp, [...(byGroup.get(p.grp) ?? []), p])
   for (const p of players) p.dna = archetype(p)
 
   // Early-career context: rank within the class, overall and at the position.
@@ -823,7 +835,7 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'oi', 'm1', 'm2', 'mult', 'ladder', 'q', 'qgrade', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+    'preEra', 'oi', 'm1', 'm2', 'mult', 'ladder', 'q', 'qgrade', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
   // Recruiting fields stay null when there is no link: null means "unknown", never 0.
   const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' || f === 'qgrade' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
@@ -833,7 +845,7 @@ async function main() {
     source: BASE,
     lastSeason: LAST_SEASON,
     model: {
-      bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: FIRST_CLASS, lastClass: LAST_CLASS,
+      bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: HISTORY_FROM, recruitingFrom: FIRST_CLASS, historyFrom: HISTORY_FROM, statsFrom: STATS_FROM, lastClass: LAST_CLASS,
       youngFrom: YOUNG_FROM, gradeCurve: GRADE_CURVE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, eliteTop: ELITE_TOP, eliteFrom: ELITE_FROM, qualityPower: QUALITY_POWER, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },

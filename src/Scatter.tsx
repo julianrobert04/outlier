@@ -11,6 +11,7 @@ type Props = {
 }
 
 const PICK_TICKS = [1, 5, 10, 32, 64, 100, 150, 250]
+const PICK_MAX = 340 // 12-round drafts (1985–1992) ran to ~335 picks
 const PAD = { l: 44, r: 16, t: 16, b: 36 }
 
 // Highlight the true outliers. Among undrafted players nearly any real career
@@ -53,7 +54,7 @@ export default function Scatter({ players, height = 460, labels = [], focus, ton
   const ymax = Math.ceil(maxAv / 50) * 50
   const hasUdfa = useMemo(() => players.some(p => !p.pick), [players])
   const plotR = w - PAD.r - (hasUdfa ? Math.max(48, w * 0.07) : 0) // drafted area ends here
-  const x = (pick: number) => PAD.l + (Math.log(pick) / Math.log(262)) * (plotR - PAD.l)
+  const x = (pick: number) => PAD.l + (Math.log(pick) / Math.log(PICK_MAX)) * (plotR - PAD.l)
   const udfaX = (id: string) => plotR + 18 + (jitter(id) + 0.5) * (w - PAD.r - plotR - 22)
   const y = (av: number) => PAD.t + (1 - av / ymax) * (height - PAD.t - PAD.b)
 

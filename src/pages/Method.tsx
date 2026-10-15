@@ -8,7 +8,7 @@ export default function MethodPage({ data }: { data: Dataset }) {
 
       <Block t="Data">
         <p>
-          <strong>Players:</strong> everyone who entered the NFL from {data.model.firstClass} to {data.model.lastClass}, drafted or not:
+          <strong>Players:</strong> every drafted player from {data.model.firstClass} to {data.model.lastClass}, plus undrafted players with NFL season stats (1999 on):
           {' '}{data.players.length.toLocaleString()} players ({data.players.filter(p => !p.pick).length.toLocaleString()} undrafted). Everything comes from the open{' '}
           <a href="https://github.com/nflverse/nflverse-data" style={{ textDecoration: 'underline' }}>nflverse</a> project: draft picks with
           Pro Football Reference career data, the player registry, season stats, depth charts (2001–11) and snap counts (2012+). The dataset was last rebuilt on {new Date(data.generated).toLocaleDateString('en-US', { dateStyle: 'long' })}.
@@ -56,7 +56,7 @@ export default function MethodPage({ data }: { data: Dataset }) {
           (2001–2012, counting only weeks the team played) or at least 50% of offensive or defensive snaps (2013+).
         </p>
         <p>
-          <strong>Stuffs</strong> and <strong>run stops</strong> are computed from every regular-season running play since {data.model.firstClass}.
+          <strong>Stuffs</strong> and <strong>run stops</strong> are computed from every regular-season running play since {data.model.recruitingFrom}.
           A stuff is a tackle on a run that gained nothing or lost yards. A run stop is a tackle on a run the offense failed:
           under 40% of the needed yards on 1st down, under 60% on 2nd, short of the line to gain on 3rd or 4th. Every tackler on the play
           gets credit. Pressures, hurries, missed tackles, coverage allowed, broken tackles, yards before contact and drops come from
@@ -133,7 +133,7 @@ export default function MethodPage({ data }: { data: Dataset }) {
       </Block>
 
       <Block t="Known limits">
-        <p>Undrafted players’ value is estimated, and the registry is less complete for undrafted players who never reached a game-day roster in the early 2000s. AV is an approximation and favors positions with box-score stats. Active careers can still change in either direction.</p>
+        <p>Season-by-season stats start in {data.model.statsFrom}: earlier seasons of older careers count in career value and honors but don’t appear in the season tables. High-school ratings start with the {data.model.recruitingFrom} class, so older players are graded from the draft step. Undrafted players’ value is estimated, and the registry is less complete for undrafted players who never reached a game-day roster in the early 2000s. AV is an approximation and favors positions with box-score stats. Active careers can still change in either direction.</p>
       </Block>
     </div>
   )

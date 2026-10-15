@@ -75,13 +75,13 @@ function RoundsQuestion({ data }: { data: Dataset }) {
       answer={<>Usually. But <span className="num over">{Math.round(share * 100)}%</span> of second-rounders out-produced the typical first-rounder ({m1} career AV){grp !== 'ALL' && <> among {GROUP_NAME[grp].toLowerCase()}</>}.</>}>
       <div className="controls"><Chips value={grp} onChange={setGrp} label="Position" options={['ALL', ...GROUPS] as (Group | 'ALL')[]} /></div>
       <Bars bars={bars} unit="median career AV" />
-      <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>Draft classes 2000–{FULL_CAREER_CUTOFF} ({pool.length.toLocaleString()} players), so careers are essentially complete.</p>
+      <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>Draft classes {data.model.firstClass}–{FULL_CAREER_CUTOFF} ({pool.length.toLocaleString()} players), so careers are essentially complete.</p>
     </Question>
   )
 }
 
 function RiskQuestion({ data }: { data: Dataset }) {
-  const [since, setSince] = useState(2000)
+  const [since, setSince] = useState(1985)
   const first = data.players.filter(p => p.round === 1 && p.year >= since && p.year <= data.model.lastJudgedClass && p.grp !== 'ST')
   const bars = GROUPS.filter(g => g !== 'ST').map(g => {
     const xs = first.filter(p => p.grp === g)
@@ -91,7 +91,7 @@ function RiskQuestion({ data }: { data: Dataset }) {
   return (
     <Question n="02" q="Which position is the riskiest first-round pick?"
       answer={<><span className="num under">{worst.value}%</span> of first-round {GROUP_NAME[worst.label as Group].toLowerCase()} became busts, against <span className="num">{best.value}%</span> of {GROUP_NAME[best.label as Group].toLowerCase()}.</>}>
-      <div className="controls"><Chips value={since} onChange={setSince} label="Drafted since" options={[2000, 2005, 2010, 2015]} /></div>
+      <div className="controls"><Chips value={since} onChange={setSince} label="Drafted since" options={[1985, 1995, 2005, 2015]} /></div>
       <Bars bars={bars} unit="% of 1st-rounders who finished below 85% of comparable picks" suffix="%" tone="under" />
       <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>A bust here is a first-round pick who finished below 85% of comparable picks at the same position and era.</p>
     </Question>
@@ -102,13 +102,13 @@ function SmarterQuestion({ data }: { data: Dataset }) {
   const { tip, setTip } = useTip()
   const series = useMemo(() => {
     const out: { year: number; rho: number }[] = []
-    for (let y = 2000; y <= data.model.lastJudgedClass; y++) {
+    for (let y = data.model.firstClass; y <= data.model.lastJudgedClass; y++) {
       const c = data.players.filter((p: Player) => p.year === y && p.pick > 0)
       if (c.length > 50) out.push({ year: y, rho: -spearman(c.map(p => p.pick), c.map(p => p.av)) })
     }
     return out
   }, [data])
-  const early = series.filter(s => s.year <= 2005), late = series.filter(s => s.year >= 2012 && s.year <= 2017)
+  const early = series.filter(s => s.year <= 1994), late = series.filter(s => s.year >= 2008 && s.year <= 2017)
   const avg = (xs: { rho: number }[]) => xs.reduce((s, x) => s + x.rho, 0) / xs.length
   const W = 900, H = 260, P = { l: 40, r: 16, t: 16, b: 28 }
   const x = (y: number) => P.l + ((y - series[0].year) / (series[series.length - 1].year - series[0].year)) * (W - P.l - P.r)
@@ -116,7 +116,7 @@ function SmarterQuestion({ data }: { data: Dataset }) {
   const path = series.map((s, i) => `${i ? 'L' : 'M'}${x(s.year)},${yv(s.rho)}`).join('')
   return (
     <Question n="03" q="Is the NFL getting better at drafting?"
-      answer={<>{verdict(avg(late) - avg(early))} The link between draft order and career value went from <span className="num">{avg(early).toFixed(2)}</span> for 2000–05 to <span className="num">{avg(late).toFixed(2)}</span> for 2012–17.</>}>
+      answer={<>{verdict(avg(late) - avg(early))} The link between draft order and career value went from <span className="num">{avg(early).toFixed(2)}</span> for 1985–94 to <span className="num">{avg(late).toFixed(2)}</span> for 2008–17.</>}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Rank correlation between draft order and career value, by draft class"
         onMouseLeave={() => setTip(null)}>
         {[0, 0.2, 0.4, 0.6].map(v => (

@@ -6,7 +6,7 @@ const SHRINK = 15 // pseudo-players at zero gap: small samples are pulled toward
 
 export default function LabPage({ data, college }: { data: Dataset; college?: string }) {
   const [grp, setGrp] = useQueryState<Group | 'ALL'>('grp', 'ALL')
-  const [since, setSince] = useQueryState<number>('since', 2000)
+  const [since, setSince] = useQueryState<number>('since', 1985)
   const [minN, setMinN] = useQueryState<number>('min', 25)
   const { tip, setTip } = useTip()
   useEffect(() => { if (college) document.getElementById('college')?.scrollIntoView() }, [college])
@@ -49,7 +49,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
       <div className="section" style={{ marginTop: 48 }}>
         <div className="controls">
           <Chips value={grp} onChange={setGrp} label="Position" options={['ALL', ...GROUPS] as (Group | 'ALL')[]} />
-          <Chips value={since} onChange={setSince} label="Drafted since" options={[2000, 2005, 2010, 2015]} />
+          <Chips value={since} onChange={setSince} label="Drafted since" options={[1985, 1995, 2000, 2010]} />
           <Chips value={minN} onChange={setMinN} label="Min. players" options={[10, 25, 50]} />
         </div>
         <p className="muted" style={{ fontSize: 13, marginBottom: 8, maxWidth: '80ch' }}>
