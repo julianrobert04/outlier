@@ -23,7 +23,13 @@ export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
         <span className="stage-value num">{p.games ? oiLabel(p.base) : '—'}</span>
         <span className="stage-text">
           {p.games
-            ? <>{p.av} career value{p.est ? ' (estimated)' : ''}{p.honorPoints ? ` + ${p.honorPoints} honor points` : ''}: better than {pct(p.q)} of {pos} who played since {data.model.firstClass}{p.active ? ', and still counting' : ''}. This sets the base grade.</>
+            ? <>
+                {p.bestRank != null
+                  ? <>Best season ranked <strong>No. {p.bestRank}</strong> among {p.grp}s; <strong>{p.top10}</strong> top-10 and <strong>{p.top20}</strong> top-20 seasons. </>
+                  : null}
+                {p.av} career value{p.est ? ' (estimated)' : ''}{p.honorPoints ? ` + ${p.honorPoints} honor points` : ''}.
+                {' '}Overall, better than {pct(p.q)} of {pos} who played since {data.model.firstClass}{p.active ? ', and still counting' : ''}. This sets the base grade.
+              </>
             : 'Never played a regular-season game.'}
         </span>
       </li>
@@ -86,8 +92,8 @@ export function FormulaExplainer({ data, ids }: { data: Dataset; ids: string[] }
       <div className="rule-box">
         <p className="h3">Career first, expectations second</p>
         <ul className="plain">
-          <li><strong>1. How good the career was sets the base.</strong> Career value (built from his stats) plus honor points on a scale of prestige, ranked against everyone at the position. Hall-of-Fame level is .99, Pro Bowl level the .90s, a solid starter the .80s, a role player the .50s.</li>
-          <li><strong>2. Beating expectations lifts it.</strong> The star rating sets the bar for the draft, and the draft slot sets the bar for the career. A 2★ taken in round 2 who then outplays his slot climbs toward .99.</li>
+          <li><strong>1. How good the career was sets the base</strong>, balanced three ways: his peak (how his best seasons ranked at his position), how often he was top 10 or top 20 at his position, and his total career value plus honors. Lasting a long time isn’t enough on its own. Hall-of-Fame level is .99, a perennial top-10 player the high .80s, a solid starter the .70s, a role player around .50–.60.</li>
+          <li><strong>2. Beating expectations lifts it</strong>, in proportion to how good the career was. The star rating sets the bar for the draft, and the draft slot sets the bar for the career. A 2★ who becomes a star climbs toward .99; an undrafted role player gains little.</li>
           <li><strong>3. Falling short of the slot drops it</strong>, harder the higher the expectation. A #1 pick who flames out falls to .01; a 7th-rounder who barely played loses little.</li>
           <li><strong>Careers in progress</strong> are capped at {oiLabel(data.model.activeCap)} until they end ({oiLabel(data.model.earlyCap)} for the {data.model.youngFrom}+ classes): they can still go down. Grades round down. {data.players.filter(p => p.oi >= 0.99).length} careers since {data.model.firstClass} reach .99.</li>
         </ul>

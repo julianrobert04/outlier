@@ -37,6 +37,9 @@ export type Player = {
   mult: number // combined multiplier behind the grade
   q: number // career quality: (career value + honor points) percentile within position
   base: number // grade from career quality alone
+  top10: number // seasons ranked top 10 at his position
+  top20: number
+  bestRank: number | null // best season rank at his position
   climbAdd: number // added for beating expectations
   fallFactor: number // multiplier for falling short of the draft slot (1 = none)
   ap2: number // second-team All-Pro selections

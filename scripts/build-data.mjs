@@ -419,18 +419,67 @@ const RECRUIT_GROUP = {
 // An early read can't reach the top of the scale until the career has run.
 const EARLY_CAP = 0.95
 const careerMultiplier = p => (Math.max(p.av, 0) + 1) / (p.exp + 1)
-// Career quality: what the player actually produced. Total career value (from
-// his stats) plus honor points, as a percentile among everyone at the
-// position who played. Careers still in progress are capped at ACTIVE_CAP.
+// Career quality: what the player actually produced, balanced three ways so
+// that lasting a long time isn't enough on its own:
+//   peak  (35%) — how his best three seasons ranked against his position that
+//                 season, by position-specific production (SEASON_PRODUCTION);
+//   elite (35%) — how often he was top 10 / top 20 at his position in a season;
+//   total (30%) — career value plus honor points.
+// Each part is a percentile within the position; the mix is ranked again.
+// Positions without box-score production (OL, specialists) use the total.
+// Careers still in progress are capped at ACTIVE_CAP.
 const ACTIVE_CAP = 0.97
+const n0 = x => Number(x || 0)
+const SEASON_PRODUCTION = {
+  QB: s => n0(s.pyd) + 20 * n0(s.ptd) - 45 * n0(s.int) + n0(s.ryd) + 20 * n0(s.rtd),
+  RB: s => n0(s.ryd) + n0(s.recyd) + 20 * (n0(s.rtd) + n0(s.rectd)),
+  WR: s => n0(s.recyd) + 20 * n0(s.rectd) + n0(s.ryd),
+  TE: s => n0(s.recyd) + 20 * n0(s.rectd),
+  DL: s => 20 * n0(s.sk) + 8 * n0(s.tfl) + 5 * n0(s.qbh) + n0(s.solo) + 10 * n0(s.ff),
+  LB: s => n0(s.solo) + 0.5 * n0(s.ast) + 15 * n0(s.sk) + 6 * n0(s.tfl) + 20 * n0(s.dint) + 5 * n0(s.pd) + 10 * n0(s.ff),
+  DB: s => 25 * n0(s.dint) + 8 * n0(s.pd) + n0(s.solo) + 10 * n0(s.ff),
+}
 function careerQuality(players) {
-  const pools = new Map()
-  const score = p => Math.max(p.av, 0) + (p.honorPoints ?? 0)
-  for (const p of players) if (!p.young && p.games > 0) pools.set(p.grp, [...(pools.get(p.grp) ?? []), score(p)])
-  for (const v of pools.values()) v.sort((a, b) => a - b)
+  // Season ranks within position.
+  const seasons = new Map()
   for (const p of players) {
-    const pool = pools.get(p.grp)
-    p.q = pool && p.games > 0 ? midRankSorted(pool, score(p)) : 0
+    const f = SEASON_PRODUCTION[p.grp]
+    if (!f) continue
+    for (const s of p.rows) {
+      if (!(s.g > 0)) continue
+      const k = `${p.grp}|${s.season}`
+      seasons.set(k, [...(seasons.get(k) ?? []), { p, v: f(s) }])
+    }
+  }
+  for (const p of players) { p.seasonRanks = []; p.seasonPcts = [] }
+  for (const list of seasons.values()) {
+    list.sort((a, b) => b.v - a.v)
+    list.forEach((x, i) => { x.p.seasonRanks.push(i + 1); x.p.seasonPcts.push(1 - i / list.length) })
+  }
+  for (const p of players) {
+    const r = p.seasonRanks
+    p.top10 = r.filter(x => x <= 10).length
+    p.top20 = r.filter(x => x <= 20).length
+    p.bestRank = r.length ? Math.min(...r) : null
+    const best = [...p.seasonPcts].sort((a, b) => b - a)
+    p.peakVal = ((best[0] ?? 0) + (best[1] ?? 0) + (best[2] ?? 0)) / 3
+    p.eliteVal = 3 * p.top10 + p.top20
+    p.totalVal = Math.max(p.av, 0) + (p.honorPoints ?? 0)
+  }
+  // Percentiles within position, among players who played (completed or long careers).
+  const sortedBy = (list, f) => list.map(f).sort((a, b) => a - b)
+  const byGrp = new Map()
+  for (const p of players) if (!p.young && p.games > 0) byGrp.set(p.grp, [...(byGrp.get(p.grp) ?? []), p])
+  for (const [g, pool] of byGrp) {
+    const tot = sortedBy(pool, p => p.totalVal)
+    if (!SEASON_PRODUCTION[g]) {
+      for (const p of players) if (p.grp === g) p.q = p.games > 0 ? midRankSorted(tot, p.totalVal) : 0
+      continue
+    }
+    const peak = sortedBy(pool, p => p.peakVal), elite = sortedBy(pool, p => p.eliteVal)
+    const mix = p => 0.35 * midRankSorted(peak, p.peakVal) + 0.35 * midRankSorted(elite, p.eliteVal) + 0.30 * midRankSorted(tot, p.totalVal)
+    const mixed = sortedBy(pool, mix)
+    for (const p of players) if (p.grp === g) p.q = p.games > 0 ? midRankSorted(mixed, mix(p)) : 0
   }
 }
 function midRankSorted(sorted, x) {
@@ -450,8 +499,8 @@ function midRankSorted(sorted, x) {
 //      career multiplier ^ (expected value ÷ BUST_SCALE), so the higher the
 //      expectation, the harder the drop (JaMarcus Russell .01; a 7th-rounder
 //      who barely played loses little).
-const CAREER_ANCHORS = [[0, 0.30], [0.3, 0.38], [0.6, 0.50], [0.8, 0.62], [0.9, 0.74], [0.95, 0.82], [0.98, 0.92], [0.995, 0.99], [1, 0.99]]
-const CLIMB_SHARE = 0.25
+const CAREER_ANCHORS = [[0, 0.25], [0.3, 0.30], [0.6, 0.40], [0.8, 0.50], [0.9, 0.62], [0.95, 0.74], [0.98, 0.88], [0.995, 0.99], [1, 0.99]]
+const CLIMB_SHARE = 0.15
 const BUST_SCALE = 40
 function careerGrade(q) {
   for (let i = 1; i < CAREER_ANCHORS.length; i++) {
@@ -467,7 +516,8 @@ function finalGrade(p) {
   p.mult = climb
   const base = p.games ? careerGrade(p.q) : CAREER_ANCHORS[0][1]
   let g = base
-  if (climb > 1) g += (0.99 - g) * CLIMB_SHARE * (1 - 1 / climb)
+  // The climb only counts as much as the career was good (× quality).
+  if (climb > 1) g += (0.99 - g) * CLIMB_SHARE * (1 - 1 / climb) * p.q
   const afterClimb = g
   if (career < 1) g *= Math.pow(career, Math.max(p.exp, 1) / BUST_SCALE)
   p.base = gradeOI(base)
@@ -894,9 +944,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'preEra', 'oi', 'm1', 'm2', 'mult', 'base', 'climbAdd', 'fallFactor', 'q', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+    'preEra', 'oi', 'm1', 'm2', 'mult', 'base', 'climbAdd', 'fallFactor', 'q', 'top10', 'top20', 'bestRank', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
   // Recruiting fields stay null when there is no link: null means "unknown", never 0.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear'].includes(f) ? v ?? null : v ?? 0)
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear', 'bestRank'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({

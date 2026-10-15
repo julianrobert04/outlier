@@ -103,9 +103,16 @@ export default function MethodPage({ data }: { data: Dataset }) {
  to become the career-quality percentile.
         </p>
         <p>
+          <strong>Career quality is balanced three ways</strong> so that lasting a long time isn’t enough on its own: peak (35%, how his best
+          three seasons ranked at his position by production that year), elite seasons (35%, top-10 and top-20 finishes at his position) and total
+          (30%, career value plus honor points). Season production is position-specific: passing yards, TDs and INTs for QBs; scrimmage yards and TDs
+          for backs and receivers; sacks, TFL and QB hits for the defensive line; tackles, sacks, TFL and takeaways for linebackers; interceptions and
+          passes defended for defensive backs. Offensive linemen and specialists use the total only.
+        </p>
+        <p>
           <strong>Grade: career first, expectations second.</strong> The career-quality percentile sets the base on a fixed scale
-          (50th percentile → .46, 80th → .62, 90th → .74, 95th → .82, 98th → .92, top 0.5% → .99). A climb above expectations lifts it
-          up to {Math.round(data.model.climbShare * 100)}% of the way to .99 (× (1 − 1/climb)). A career below its draft slot multiplies it by
+          (80th percentile → .50, 90th → .62, 95th → .74, 98th → .88, top 0.5% → .99). A climb above expectations lifts it
+          up to {Math.round(data.model.climbShare * 100)}% of the way to .99, scaled by career quality, so a climb only counts as much as the career was good. A career below its draft slot multiplies it by
           career multiplier<sup>expected value ÷ {data.model.bustScale}</sup>, so a #1 pick who flames out falls to .01 while a late pick who barely
           played loses little. Careers in progress are capped at {data.model.activeCap.toFixed(2).replace(/^0/, '')} because they can still go down.
           Bands: .99 legendary, .95+ great, .85+ very good, .70+ solid, .50+ as expected, .25+ below expectations, under .25 bust.</p>
