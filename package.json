@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "data": "node scripts/fetch-honors.mjs && node scripts/build-pbp.mjs && node scripts/build-data.mjs",
-    "data:cfbd": "node scripts/fetch-recruits.mjs && node scripts/fetch-college.mjs && node scripts/build-data.mjs --offline"
+    "data:cfbd": "node scripts/fetch-recruits.mjs && node scripts/fetch-college.mjs && node scripts/build-data.mjs --offline",
+    "data:wiki": "node scripts/fetch-wiki-stats.mjs && node scripts/parse-wiki-stats.mjs && node scripts/build-data.mjs --offline"
   },
   "dependencies": {
     "react": "^19.1.0",

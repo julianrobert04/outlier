@@ -15,6 +15,8 @@ jobs:
       - name: Add recruiting ratings and college stats (CollegeFootballData.com)
         if: env.CFBD_API_KEY != ''
         run: npm run data:cfbd
+      - name: Older seasons from Wikipedia (NFL before 1999, college before CFBD coverage)
+        run: npm run data:wiki
       - run: |
           git config user.name "outlier-bot"
           git config user.email "outlier-bot@users.noreply.github.com"

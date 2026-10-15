@@ -109,8 +109,32 @@ const SEASON_COLS = ['season', 'team', 'g', 'gs', 'cmp', 'att', 'pyd', 'ptd', 'i
   // derived from play-by-play (2000+)
   'stuff', 'rstop', 'rtkl',
   // Pro Football Reference advanced stats (2018+)
-  'prss', 'hrry', 'qbkd', 'mtkl', 'bltz', 'tgta', 'cmpa', 'ydsa', 'tda', 'ybc', 'brk', 'drop', 'prsd', 'badt']
+  'prss', 'hrry', 'qbkd', 'mtkl', 'bltz', 'tgta', 'cmpa', 'ydsa', 'tda', 'ybc', 'brk', 'drop', 'prsd', 'badt',
+  // 'W' when the season comes from the player's Wikipedia page (seasons before STATS_FROM)
+  'src']
 const ADV_FROM = 2018
+
+// Seasons the open stat sources don't reach, from Wikipedia stat tables
+// (scripts/fetch-wiki-stats.mjs + parse-wiki-stats.mjs). Validated against
+// nflverse where they overlap (1999+): yards, TDs and INTs agree 96–99%.
+let WIKI = {}
+const WIKI_NFL_KEYS = ['g', 'gs', 'cmp', 'att', 'pyd', 'ptd', 'int', 'car', 'ryd', 'rtd', 'rec', 'tgt', 'recyd', 'rectd',
+  'solo', 'ast', 'sk', 'dint', 'pd', 'ff', 'fr', 'sfty', 'fuml', 'skd', 'fgm', 'fga']
+function withWikiSeasons(id, rows, year) {
+  const w = WIKI[id]?.nfl
+  if (!w) return rows
+  const have = new Set(rows.map(r => r.season))
+  const add = new Map()
+  for (const r of w) {
+    if (r.season >= STATS_FROM || r.season < year || have.has(r.season)) continue
+    // Stats the page doesn't track stay null (shown as —), not 0.
+    const row = add.get(r.season) ?? Object.assign(Object.fromEntries(SEASON_COLS.map(c => [c, null])), { season: r.season, team: r.team ?? '', src: 'W' })
+    for (const k of WIKI_NFL_KEYS) if (r[k] != null) row[k] = (row[k] ?? 0) + r[k]
+    if (add.has(r.season) && r.team && !row.team.includes(r.team)) row.team += `/${r.team}`
+    add.set(r.season, row)
+  }
+  return [...add.values(), ...rows].sort((a, b) => a.season - b.season)
+}
 const STAT_MAP = {
   cmp: 'completions', att: 'attempts', pyd: 'passing_yards', ptd: 'passing_tds', int: 'passing_interceptions',
   car: 'carries', ryd: 'rushing_yards', rtd: 'rushing_tds', rec: 'receptions', tgt: 'targets',
@@ -136,7 +160,7 @@ async function buildSeasons(pfrToGsis) {
   const row = (id, y) => {
     if (!seasons.has(id)) seasons.set(id, new Map())
     const m = seasons.get(id)
-    if (!m.has(y)) m.set(y, { season: y, team: '', g: 0, gs: 0, snapG: 0, snapGS: 0, depthGS: new Set(), ...Object.fromEntries([...Object.keys(STAT_MAP), ...EXTRA].map(k => [k, 0])) })
+    if (!m.has(y)) m.set(y, { season: y, team: '', src: '', g: 0, gs: 0, snapG: 0, snapGS: 0, depthGS: new Set(), ...Object.fromEntries([...Object.keys(STAT_MAP), ...EXTRA].map(k => [k, 0])) })
     return m.get(y)
   }
   for (const y of range(STATS_FROM, LAST_SEASON)) {
@@ -146,6 +170,8 @@ async function buildSeasons(pfrToGsis) {
       s.g = Math.max(s.g, num(r.games))
       s.team = r.recent_team || s.team
       for (const [k, col] of Object.entries(STAT_MAP)) s[k] += num(r[col])
+      // Official solo tackles = solo + tackles made with an assist (assists are separate).
+      s.solo += num(r.def_tackles_with_assist)
     }
   }
   // Starters from depth charts: first string on the weekly offensive/defensive
@@ -210,7 +236,7 @@ async function buildSeasons(pfrToGsis) {
 }
 
 function careerTotals(rows) {
-  const t = Object.fromEntries(SEASON_COLS.slice(2).map(k => [k, 0]))
+  const t = Object.fromEntries(SEASON_COLS.slice(2).filter(k => k !== 'src').map(k => [k, 0]))
   for (const s of rows) for (const k in t) t[k] += s[k]
   t.played = rows.filter(s => s.g > 0).length
   t.starterSeasons = rows.filter(s => s.gs >= 8).length
@@ -674,7 +700,7 @@ async function linkHonors(players) {
 // defense from 2016, nothing for linemen.
 
 const COLLEGE_COLS = ['season', 'team', 'cmp', 'att', 'pyd', 'ptd', 'int', 'car', 'ryd', 'rtd', 'rec', 'recyd', 'rectd',
-  'tot', 'solo', 'tfl', 'sk', 'hur', 'pd', 'dint', 'dtd', 'kry', 'pry', 'fgm', 'fga']
+  'tot', 'solo', 'tfl', 'sk', 'hur', 'pd', 'dint', 'dtd', 'kry', 'pry', 'fgm', 'fga', 'src']
 const COLLEGE_MAP = {
   'passing.COMPLETIONS': 'cmp', 'passing.ATT': 'att', 'passing.YDS': 'pyd', 'passing.TD': 'ptd', 'passing.INT': 'int',
   'rushing.CAR': 'car', 'rushing.YDS': 'ryd', 'rushing.TD': 'rtd', 'receiving.REC': 'rec', 'receiving.YDS': 'recyd',
@@ -707,7 +733,7 @@ async function linkCollege(players) {
       if (!key) continue
       if (!cf.has(id)) cf.set(id, { name, seasons: new Map() })
       const ss = cf.get(id).seasons
-      if (!ss.has(y)) ss.set(y, { season: y, team, ...Object.fromEntries(COLLEGE_COLS.slice(2).map(k => [k, 0])) })
+      if (!ss.has(y)) ss.set(y, { season: y, team, ...Object.fromEntries(COLLEGE_COLS.slice(2).map(k => [k, 0])), src: '' })
       ss.get(y)[key] += num(stat)
     }
   }
@@ -726,6 +752,17 @@ async function linkCollege(players) {
     p.collegeRows = [...c.seasons.values()].filter(s => s.season < p.year).sort((a, b) => a.season - b.season)
     linked++
   }
+  // College seasons from Wikipedia where CollegeFootballData has none.
+  for (const p of players) {
+    const w = WIKI[p.id]?.college
+    if (!w?.length) continue
+    const have = new Set((p.collegeRows ?? []).map(r => r.season))
+    const extra = w.filter(r => r.season < p.year && !have.has(r.season)).map(r =>
+      Object.assign(Object.fromEntries(COLLEGE_COLS.map(k => [k, null])), Object.fromEntries(Object.entries(r).filter(([k]) => COLLEGE_COLS.includes(k))), { src: 'W', team: r.team ?? p.college }))
+    if (!extra.length) continue
+    if (!p.collegeRows?.length) linked++
+    p.collegeRows = [...(p.collegeRows ?? []), ...extra].sort((a, b) => a.season - b.season)
+  }
 
   // College production percentile within position group, among linked players.
   // Defensive groups only count players whose college years had defensive stats.
@@ -733,7 +770,7 @@ async function linkCollege(players) {
     const group = players.filter(p => p.grp === g && p.collegeRows?.length &&
       (!DEFENSIVE.has(g) || p.collegeRows.some(s => s.season >= COLLEGE_DEFENSE_FROM)))
     const vals = group.map(p => {
-      const t = Object.fromEntries(COLLEGE_COLS.slice(2).map(k => [k, p.collegeRows.reduce((s, r) => s + r[k], 0)]))
+      const t = Object.fromEntries(COLLEGE_COLS.slice(2).filter(k => k !== 'src').map(k => [k, p.collegeRows.reduce((s, r) => s + r[k], 0)]))
       return f(t)
     })
     group.forEach((p, i) => { p.cpct = clampOI(midRank(vals[i], vals)) })
@@ -745,6 +782,7 @@ async function linkCollege(players) {
 
 async function main() {
   if (!process.argv.includes('--offline')) await download()
+  if (existsSync(`${RAW}/wiki/stats.json`)) WIKI = JSON.parse(await readFile(`${RAW}/wiki/stats.json`, 'utf8'))
   const picks = await load('draft_picks.csv')
   const registry = await load('players.csv')
   const pfrToGsis = new Map(registry.filter(r => r.pfr_id && r.gsis_id).map(r => [r.pfr_id, r.gsis_id]))
@@ -760,7 +798,7 @@ async function main() {
       const gsis = r.gsis_id || pfrToGsis.get(r.pfr_player_id) || ''
       if (gsis) draftedIds.add(gsis)
       if (r.pfr_player_id) draftedIds.add(r.pfr_player_id)
-      const rows = gsis ? seasonRows(gsis).filter(s => s.season >= year) : []
+      const rows = withWikiSeasons(r.pfr_player_id, gsis ? seasonRows(gsis).filter(s => s.season >= year) : [], year)
       const totals = careerTotals(rows)
       return {
         id: r.pfr_player_id || gsis || `${year}-${r.pick}`, gsis, rows, totals,
@@ -875,7 +913,7 @@ async function main() {
     awardLabels: AWARD_LABEL,
     coverage: {
       startsFrom: { depthCharts: range(2001, 2024).filter(y => !snapSeasons.has(y)), snapCounts: [...snapSeasons].sort() },
-      noStarts: [2000],
+      noStarts: range(STATS_FROM, 2000),
       noTargets: range(2003, 2008),
       advancedFrom: ADV_FROM,
       runStatsFrom: FIRST_CLASS,

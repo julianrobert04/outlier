@@ -340,3 +340,4 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .recruit-line { margin-top: 14px; font-size: 14px; line-height: 1.6; max-width: 70ch; }
 .recruit-stars { color: var(--ink); letter-spacing: 0.08em; margin-right: 4px; font-size: 15px; }
 .recruit-stars .faint { color: var(--rule); }
+sup.src { font-family: var(--mono); font-size: 9px; color: var(--ink-2); margin-left: 3px; border: 1px solid var(--rule); padding: 0 2px; vertical-align: 4px; }

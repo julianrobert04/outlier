@@ -156,7 +156,7 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
                 ? `College stats in the source start around ${data.coverage.college.offenseFrom}, after this player’s college years.`
                 : 'No college stats linked for this player.'}</p>}
         <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>
-          Regular-season stats from CollegeFootballData.com. Defensive tackles, TFL, sacks and hurries start in {data.coverage.college.defenseFrom};
+          Regular-season stats from CollegeFootballData.com{college?.some(r => r.src === 'W') ? <>; seasons marked <sup className="src">W</sup> from the player’s Wikipedia page</> : null}. Defensive tackles, TFL, sacks and hurries start in {data.coverage.college.defenseFrom};
           earlier seasons show —. Production percentile compares career college totals with every NFL player at the same position who has college stats.
         </p>
       </section>
@@ -167,8 +167,10 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         {seasons === null ? <p className="faint mono" style={{ fontSize: 12 }}>loading…</p>
           : seasons.length ? <SeasonTable grp={p.grp} rows={seasons} data={data} />
             : <p className="faint">{p.preEra && p.to && p.to < data.model.statsFrom ? `This career ended before ${data.model.statsFrom}, when season-by-season stats begin.` : 'No regular-season games on record.'}</p>}
-        {seasons && seasons.length > 0 && p.preEra && p.year < data.model.statsFrom &&
-          <p className="meta" style={{ marginTop: 8 }}>Seasons before {data.model.statsFrom} aren’t in the source; they still count in career value and honors.</p>}
+        {seasons && seasons.length > 0 && p.preEra && Number(seasons[0].season) > p.year &&
+          <p className="meta" style={{ marginTop: 8 }}>Seasons before {String(seasons[0].season)} aren’t available in any open source; they still count in career value and honors.</p>}
+        {seasons?.some(r => r.src === 'W') &&
+          <p className="meta" style={{ marginTop: 8 }}><sup className="src">W</sup> season from the player’s Wikipedia page (CC BY-SA). Nflverse season stats start in {data.model.statsFrom}.</p>}
         <p className="mono faint" style={{ fontSize: 12, marginTop: 12 }}>
           GS = games started: first string on the weekly depth chart ({data.coverage.startsFrom.depthCharts[0]}–{data.coverage.startsFrom.depthCharts[data.coverage.startsFrom.depthCharts.length - 1]})
           or at least 50% of snaps ({data.coverage.startsFrom.snapCounts[0]}+). Before {data.coverage.startsFrom.snapCounts[0]}, games for players without
@@ -360,9 +362,12 @@ function StatGrid({ cols, rows, data, advanced, untrackedExtra }: {
         <tbody>
           {rows.map(r => (
             <tr key={String(r.season)}>
-              <td className="num">{r.season}{Number(r.season) === data.lastSeason ? <span className="faint">*</span> : null}</td>
+              <td className="num">
+                {r.season}{Number(r.season) === data.lastSeason ? <span className="faint">*</span> : null}
+                {r.src === 'W' && <sup className="src" title="From the player’s Wikipedia page">W</sup>}
+              </td>
               <td className="mono">{r.team}</td>
-              {cols.map(([k]) => <td key={k} className="r num">{untracked(k, r) ? '—' : f(Number(r[k] || 0))}</td>)}
+              {cols.map(([k]) => <td key={k} className="r num">{untracked(k, r) || r[k] == null ? '—' : f(Number(r[k] || 0))}</td>)}
             </tr>
           ))}
           <tr className="total">

@@ -133,7 +133,10 @@ export default function MethodPage({ data }: { data: Dataset }) {
       </Block>
 
       <Block t="Known limits">
-        <p>Season-by-season stats start in {data.model.statsFrom}: earlier seasons of older careers count in career value and honors but don’t appear in the season tables. High-school ratings start with the {data.model.recruitingFrom} class, so older players are graded from the draft step. Undrafted players’ value is estimated, and the registry is less complete for undrafted players who never reached a game-day roster in the early 2000s. AV is an approximation and favors positions with box-score stats. Active careers can still change in either direction.</p>
+        <p>Season-by-season stats from nflverse start in {data.model.statsFrom}. Earlier NFL seasons, and college seasons CollegeFootballData.com doesn’t cover,
+          come from the season tables on players’ Wikipedia pages (CC BY-SA), found through Wikidata’s link to Pro Football Reference IDs and marked “W”.
+          Where both sources overlap (1999+), Wikipedia’s yards, touchdowns and interceptions agree with nflverse 96–99% of the time.
+          Pages without stat tables leave those seasons empty: earlier seasons of older careers count in career value and honors but don’t appear in the season tables. High-school ratings start with the {data.model.recruitingFrom} class, so older players are graded from the draft step. Undrafted players’ value is estimated, and the registry is less complete for undrafted players who never reached a game-day roster in the early 2000s. AV is an approximation and favors positions with box-score stats. Active careers can still change in either direction.</p>
       </Block>
     </div>
   )
