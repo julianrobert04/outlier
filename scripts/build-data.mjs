@@ -23,7 +23,8 @@ const RAW = 'data/raw'
 const OUT = 'public/data'
 
 const FIRST_CLASS = 2000 // the era: everyone who played from 2000 on; also when recruiting ratings begin
-const HISTORY_FROM = 1985 // older draft classes, for fair expectations and players who were still active in 2000
+const SCOPE_FROM = 1995 // the site covers every draft class from here on
+const HISTORY_FROM = 1992 // earlier classes load too, so 1995–97 picks get full comparison windows
 const STATS_FROM = 1999 // first season of nflverse season stats
 const LAST_CLASS = 2025 // most recent class with NFL games played
 const YOUNG_FROM = 2022 // 2022+ classes: early-career track
@@ -761,7 +762,7 @@ async function main() {
     const year = num(r.rookie_season)
     if (r.draft_round || !GROUP[r.position] || year > LAST_CLASS) continue
     // Undrafted players from before 2000 count if they have season stats (1999+).
-    if (year < FIRST_CLASS && (year < HISTORY_FROM || num(r.last_season) < STATS_FROM)) continue
+    if (year < FIRST_CLASS && (year < SCOPE_FROM || num(r.last_season) < STATS_FROM)) continue
     if (draftedIds.has(r.gsis_id) || draftedIds.has(r.pfr_id)) continue
     const rows = seasonRows(r.gsis_id).filter(s => s.season >= year)
     const totals = careerTotals(rows)
@@ -797,7 +798,7 @@ async function main() {
   for (const p of players) Object.assign(p, expectation(p, byGroup.get(p.grp)))
   // …then the site keeps every drafted player from HISTORY_FROM on, and undrafted
   // players with season stats (their career value is estimated from them).
-  players = players.filter(p => p.pick > 0 || p.year >= FIRST_CLASS || p.to >= STATS_FROM)
+  players = players.filter(p => p.year >= SCOPE_FROM && (p.pick > 0 || p.year >= FIRST_CLASS || p.to >= STATS_FROM))
   for (const p of players) p.preEra = p.year < FIRST_CLASS ? 1 : 0
   byGroup = new Map()
   for (const p of players) byGroup.set(p.grp, [...(byGroup.get(p.grp) ?? []), p])
@@ -845,7 +846,7 @@ async function main() {
     source: BASE,
     lastSeason: LAST_SEASON,
     model: {
-      bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: HISTORY_FROM, recruitingFrom: FIRST_CLASS, historyFrom: HISTORY_FROM, statsFrom: STATS_FROM, lastClass: LAST_CLASS,
+      bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: SCOPE_FROM, recruitingFrom: FIRST_CLASS, historyFrom: HISTORY_FROM, statsFrom: STATS_FROM, lastClass: LAST_CLASS,
       youngFrom: YOUNG_FROM, gradeCurve: GRADE_CURVE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, eliteTop: ELITE_TOP, eliteFrom: ELITE_FROM, qualityPower: QUALITY_POWER, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },

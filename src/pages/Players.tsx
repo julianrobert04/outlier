@@ -3,7 +3,7 @@ import { gap, GROUPS, shortPick, type Dataset, type Group, type Player } from '.
 import { Chips, GapNum, OI, playerHref, useQueryState } from '../ui'
 
 type Entry = 'ALL' | 'DRAFTED' | 'UDFA'
-type Era = 'ALL' | '1980s' | '1990s' | '2000s' | '2010s' | 'RISING'
+type Era = 'ALL' | '1990s' | '2000s' | '2010s' | 'RISING'
 type Sort = 'oi' | 'av' | 'gap' | 'name' | 'year'
 
 const SORTS: Record<Sort, (a: Player, b: Player) => number> = {
@@ -71,7 +71,7 @@ export default function PlayersPage({ data }: { data: Dataset }) {
         <div className={`controls filters-body ${filtersOpen ? 'open' : ''}`} style={{ marginTop: 24 }}>
           <Chips value={grp} onChange={setGrp} label="Position" options={['ALL', ...GROUPS] as (Group | 'ALL')[]} />
           <Chips value={entry} onChange={setEntry} label="Entry" options={[['ALL', 'All'], ['DRAFTED', 'Drafted'], ['UDFA', 'Undrafted']]} />
-          <Chips value={era} onChange={setEra} label="Class" options={[['ALL', 'All'], ['1980s', '1980s'], ['1990s', '1990s'], ['2000s', '2000s'], ['2010s', '2010s'], ['RISING', `Rising ${data.model.youngFrom}–${String(data.model.lastClass).slice(2)}`]]} />
+          <Chips value={era} onChange={setEra} label="Class" options={[['ALL', 'All'], ['1990s', '1990s'], ['2000s', '2000s'], ['2010s', '2010s'], ['RISING', `Rising ${data.model.youngFrom}–${String(data.model.lastClass).slice(2)}`]]} />
           <Chips value={playedN} onChange={setPlayedN} label="Show" options={[[1, 'Played a game'], [0, 'Everyone']]} />
           <Chips value={sort} onChange={setSort} label="Sort by" options={[['av', 'Career value'], ['oi', 'Outlier Index'], ['gap', 'Gap'], ['year', 'Newest'], ['name', 'A–Z']]} />
         </div>

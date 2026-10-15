@@ -6,7 +6,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises'
 
-const FIRST = 1985
+const FIRST = 1995
 const LAST = new Date().getFullYear() - 1
 const API = 'https://en.wikipedia.org/w/api.php'
 const UA = 'OutlierFootball/1.0 (https://github.com/julianrobert04/outlier)'

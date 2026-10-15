@@ -11,7 +11,7 @@ type Props = {
 }
 
 const PICK_TICKS = [1, 5, 10, 32, 64, 100, 150, 250]
-const PICK_MAX = 340 // 12-round drafts (1985–1992) ran to ~335 picks
+const PICK_MAX = 262 // seven-round drafts (1994 on)
 const PAD = { l: 44, r: 16, t: 16, b: 36 }
 
 // Highlight the true outliers. Among undrafted players nearly any real career
