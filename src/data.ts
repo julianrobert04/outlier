@@ -46,6 +46,10 @@ export type Player = {
   from: 'recruit' | 'draft' | 'udfa' // the stage the index is measured from
   stars: number
   rating: number
+  recRank: number | null // national rank in the recruiting class (247 Composite)
+  recPosRank: number | null // rank at his recruiting position in that class
+  recPos: string
+  recYear: number | null
   sDraftRate: number | null // share of same-star recruits who got drafted
   sMedianPick: number | null // typical pick for those who did
   cpct: number | null // college production percentile within position group
@@ -125,6 +129,15 @@ export function honorsList(p: Player, d: Dataset): string[] {
   if (p.pb) out.push(`${p.pb}× Pro Bowl`)
   return out
 }
+
+// Recruiting positions as 247Sports labels them.
+const RECRUIT_POS: Record<string, string> = {
+  PRO: 'pro-style QB', DUAL: 'dual-threat QB', QB: 'QB', RB: 'RB', APB: 'all-purpose back', FB: 'FB', WR: 'WR', TE: 'TE',
+  OT: 'OT', OG: 'OG', OC: 'C', IOL: 'interior OL', OL: 'OL', SDE: 'strongside DE', WDE: 'weakside DE', EDGE: 'edge',
+  DT: 'DT', DL: 'DL', ILB: 'inside LB', OLB: 'outside LB', LB: 'LB', CB: 'CB', S: 'S', DB: 'DB', ATH: 'athlete',
+  K: 'K', P: 'P', LS: 'LS',
+}
+export const recruitPosLabel = (p: string) => RECRUIT_POS[p] ?? p
 
 // What a grade means, in words.
 export const GRADE_BANDS: [number, string][] = [

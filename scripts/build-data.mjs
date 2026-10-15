@@ -505,6 +505,24 @@ async function outlierIndex(players) {
     const p = cands.find(c => normSchool(c.college) === normSchool(r.school)) ?? (cands.length === 1 ? cands[0] : null)
     if (p) { p.recruit = r; r.player = p; linked++ }
   }
+  // Position rank within each recruiting class (247 Composite rating order).
+  const byClassPos = new Map()
+  for (const r of recruits) {
+    if (!r.rating) continue
+    const k = `${r.year}|${r.position}`
+    byClassPos.set(k, [...(byClassPos.get(k) ?? []), r])
+  }
+  for (const list of byClassPos.values()) {
+    list.sort((a, b) => b.rating - a.rating).forEach((r, i) => { r.posRank = i + 1 })
+  }
+  // Recruiting profile shown under the name, for every linked player with a rating.
+  for (const p of players) {
+    const r = p.recruit
+    if (!r || !r.stars) continue
+    p.stars = r.stars; p.rating = Math.round(r.rating * 10000) / 10000
+    p.recRank = r.ranking ?? null; p.recPosRank = r.posRank ?? null; p.recPos = r.position ?? ''
+    p.recYear = r.year; p.recSchool = r.school ?? ''
+  }
 
   // Stage 1, stars → draft: how much draft value the recruit got versus what
   // recruits with the same stars and position usually get. Draft value is one
@@ -836,9 +854,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'preEra', 'oi', 'm1', 'm2', 'mult', 'ladder', 'q', 'qgrade', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+    'preEra', 'oi', 'm1', 'm2', 'mult', 'ladder', 'q', 'qgrade', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
   // Recruiting fields stay null when there is no link: null means "unknown", never 0.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' || f === 'qgrade' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected'].includes(f) ? v ?? null : v ?? 0)
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' || f === 'qgrade' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({

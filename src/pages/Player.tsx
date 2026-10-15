@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  accolades, ALL_ARCHETYPES, honorsList, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
+  accolades, ALL_ARCHETYPES, honorsList, recruitPosLabel, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
   shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season,
 } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
@@ -48,10 +48,19 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
         {p.young ? <span>Early career</span> : null}
         <span>{p.pick ? `${p.year} draft · Rd ${p.round}, #${p.pick} · ${p.team}` : `Undrafted · entered ${p.year}${p.team ? ` · ${p.team}` : ''}`}</span>
         <span>{span}</span>
-        {p.hof ? <span className="over">Hall of Fame</span> : null}
         {p.active && !p.young ? <span>active, career still in progress</span> : null}
       </div>
 
+      {p.stars > 0 && (
+        <p className="recruit-line">
+          <span className="recruit-stars" aria-hidden="true">{'★'.repeat(p.stars)}<span className="faint">{'★'.repeat(5 - p.stars)}</span></span>
+          <strong>{p.stars}-star recruit</strong>
+          {p.recRank ? <> · No. {p.recRank.toLocaleString()} nationally</> : null}
+          {p.recPosRank ? <> · No. {p.recPosRank} {recruitPosLabel(p.recPos)}</> : null}
+          {p.recYear ? <> · class of {p.recYear}</> : null}
+          <span className="faint"> · 247Sports Composite {p.rating.toFixed(4).replace(/^0/, '')}</span>
+        </p>
+      )}
       {honors.length > 0 && (
         <p className="honors" aria-label="Honors">{honors.join(' · ')}</p>
       )}
