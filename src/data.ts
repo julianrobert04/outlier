@@ -32,6 +32,7 @@ export type Player = {
   dna: string
   line: string
   oi: number // Outlier Index, .01–.99
+  raw: number // grade before the Hall of Fame floor and in-progress caps
   m1: number | null // draft multiplier: draft value ÷ usual for the star rating
   m2: number // career multiplier: career value ÷ usual for the draft slot
   mult: number // combined multiplier behind the grade
@@ -40,6 +41,10 @@ export type Player = {
   top10: number // seasons ranked top 10 at his position
   top20: number
   bestRank: number | null // best season rank at his position
+  starterSeasons: number
+  secondContract: number // 1 = signed a multi-year deal after his entry year
+  bestCap: number | null // best second contract, average per year as a share of the cap
+  bestDeal: string // "year|years|apy $M|team"
   climbAdd: number // added for beating expectations
   fallFactor: number // multiplier for falling short of the draft slot (1 = none)
   ap2: number // second-team All-Pro selections
@@ -75,7 +80,7 @@ export type Dataset = {
   recruitingLinked: number
   model: {
     bandwidths: number[]; minPeers: number; lastJudgedClass: number; firstClass: number; recruitingFrom: number; historyFrom: number; statsFrom: number; lastClass: number
-    youngFrom: number; careerAnchors: [number, number][]; climbShare: number; bustScale: number; earlyCap: number; activeCap: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
+    youngFrom: number; careerAnchors: [number, number][]; climbShare: number; bustScale: number; earlyCap: number; activeCap: number; hofFloor: number; seasonFraction: number; shards: number; avModel: Record<string, { r2: number; n: number }>
   }
   seasonCols: string[]
   collegeCols: string[]
@@ -113,6 +118,13 @@ export const ordinal = (n: number) => {
 
 // "×12", "×3.5", "×0.08": how many times the usual outcome.
 export const times = (x: number) => `×${x >= 10 ? Math.round(x) : x >= 1 ? x.toFixed(1) : x >= 0.1 ? x.toFixed(2) : x.toFixed(3)}`
+
+// "2021 · 6 years · $23.0M a year · 12.6% of the cap (49ers)"
+export function dealLabel(p: Player): string {
+  if (!p.bestDeal) return ''
+  const [year, years, apy, team] = p.bestDeal.split('|')
+  return `${year} · ${years} years · $${Number(apy).toFixed(1)}M a year · ${((p.bestCap ?? 0) * 100).toFixed(1)}% of the cap${team ? ` (${team})` : ''}`
+}
 
 // Honors in order of prestige: "3× MVP (2007, 2010, 2017)", "8× Pro Bowl"…
 const AWARD_ORDER = ['mvp', 'opoy', 'dpoy', 'sbmvp', 'oroy', 'droy', 'comeback']

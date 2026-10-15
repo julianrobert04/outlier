@@ -1,4 +1,4 @@
-import { GRADE_BANDS, GROUP_NAME, gradeWord, oiLabel, shortPick, times, type Dataset, type Player } from './data'
+import { dealLabel, GRADE_BANDS, GROUP_NAME, gradeWord, oiLabel, shortPick, times, type Dataset, type Player } from './data'
 import { playerHref } from './ui'
 
 // The Outlier Index explained with a player's own numbers: career first,
@@ -24,9 +24,11 @@ export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
         <span className="stage-text">
           {p.games
             ? <>
-                {p.bestRank != null
-                  ? <>Best season ranked <strong>No. {p.bestRank}</strong> among {p.grp}s; <strong>{p.top10}</strong> top-10 and <strong>{p.top20}</strong> top-20 seasons. </>
-                  : null}
+                {p.grp === 'OL'
+                  ? <><strong>{p.starterSeasons}</strong> seasons as a starter. {p.bestDeal ? <>Best second contract: {dealLabel(p)}. </> : null}</>
+                  : p.bestRank != null
+                    ? <>Best season ranked <strong>No. {p.bestRank}</strong> among {p.grp}s; <strong>{p.top10}</strong> top-10 and <strong>{p.top20}</strong> top-20 seasons. </>
+                    : null}
                 {p.av} career value{p.est ? ' (estimated)' : ''}{p.honorPoints ? ` + ${p.honorPoints} honor points` : ''}.
                 {' '}Overall, better than {pct(p.q)} of {pos} who played since {data.model.firstClass}{p.active ? ', and still counting' : ''}. This sets the base grade.
               </>
@@ -61,7 +63,10 @@ export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
   )
 }
 
+const raw = (p: Player) => p.raw
+
 function adjustment(p: Player, data: Dataset) {
+  if (p.hof && p.oi === data.model.hofFloor) return 'Hall of Fame floor'
   if (p.young && p.oi === data.model.earlyCap) return `early read, capped at ${oiLabel(data.model.earlyCap)}`
   if (p.active && p.oi === data.model.activeCap) return `career in progress, capped at ${oiLabel(data.model.activeCap)}`
   if (p.active) return 'career in progress'
@@ -78,6 +83,7 @@ export function Equation({ p, data }: { p: Player; data: Dataset }) {
         ? <><span className="op">×</span><span>{p.fallFactor.toFixed(2)}</span></>
         : p.climbAdd > 0.004 ? <><span className="op">+</span><span>{p.climbAdd.toFixed(2)}</span></> : null}
       <span className="op">=</span>
+      {raw(p) !== p.oi && <><span>{oiLabel(raw(p))}</span><span className="op">→</span></>}
       <strong className={tone}>{oiLabel(p.oi)}</strong>
       <span className="meta" style={{ alignSelf: 'center', color: 'var(--ink)' }}>{gradeWord(p.oi)}</span>
       {adjustment(p, data) && <span className="meta" style={{ alignSelf: 'center' }}>{adjustment(p, data)}</span>}

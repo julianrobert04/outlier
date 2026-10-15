@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  accolades, ALL_ARCHETYPES, honorsList, recruitPosLabel, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
+  accolades, ALL_ARCHETYPES, dealLabel, honorsList, recruitPosLabel, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
   shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season,
 } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
@@ -60,6 +60,9 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
           {p.recYear ? <> · class of {p.recYear}</> : null}
           <span className="faint"> · 247Sports Composite {p.rating.toFixed(4).replace(/^0/, '')}</span>
         </p>
+      )}
+      {p.bestDeal && (
+        <p className="meta" style={{ marginTop: 8, color: 'var(--ink-2)' }}>Best second contract: {dealLabel(p)}</p>
       )}
       {honors.length > 0 && (
         <p className="honors" aria-label="Honors">{honors.join(' · ')}</p>

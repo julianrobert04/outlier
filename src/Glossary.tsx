@@ -15,6 +15,8 @@ export default function Glossary({ data, exampleId }: { data: Dataset; exampleId
     ['Career quality', 'How good the career was, balanced three ways: peak seasons, how often he ranked top 10 or top 20 at his position, and total career value plus honors. It sets the base grade.'],
     ['Season rank', 'Where a season ranked at his position that year, by production: yards and touchdowns for skill players, sacks and tackles for loss for pass rushers, interceptions and passes defended for defensive backs.'],
     ['Honor points', 'Awards on a scale of prestige: MVP 30, Player of the Year 20, Hall of Fame 25, Super Bowl MVP 12, first-team All-Pro 10, Rookie of the Year 6, second-team All-Pro 4, Pro Bowl 2.'],
+    ['Second contract', 'A multi-year deal signed after a player’s first contract: the market’s verdict on him. Shown as a share of that year’s salary cap so different eras compare. Data from OverTheCap, deals signed through 2022.'],
+    ['Offensive linemen', 'Linemen have no individual stats, so their career quality uses seasons as a starter, their best second contract compared with the same line spot, and career value plus All-Pro and Pro Bowl honors.'],
     ['UDFA', 'Undrafted free agent: signed after the draft. Their career value is estimated from their stats.'],
     ['Early read', 'Players from the 2022+ classes, judged on pace so far and capped at .95. Active careers are capped at .97: they can still go down.'],
     ['W', 'A season taken from the player’s Wikipedia page, where the open stat sources don’t reach (NFL before 1999, older college seasons).'],

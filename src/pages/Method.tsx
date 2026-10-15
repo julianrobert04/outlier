@@ -107,7 +107,11 @@ export default function MethodPage({ data }: { data: Dataset }) {
           three seasons ranked at his position by production that year), elite seasons (35%, top-10 and top-20 finishes at his position) and total
           (30%, career value plus honor points). Season production is position-specific: passing yards, TDs and INTs for QBs; scrimmage yards and TDs
           for backs and receivers; sacks, TFL and QB hits for the defensive line; tackles, sacks, TFL and takeaways for linebackers; interceptions and
-          passes defended for defensive backs. Offensive linemen and specialists use the total only.
+          passes defended for defensive backs. Offensive linemen have no individual production stats, so theirs is 30% seasons as a primary starter, 20% best second contract
+          (average per year as a share of the salary cap, compared within the same line spot, since centers are paid less than tackles; OverTheCap data via
+          nflverse, deals signed through 2022) and 50% career value plus honors, where All-Pro teams are the clearest public judgment of a lineman.
+          When a player’s contract history isn’t known, that part is left out rather than scored zero. Specialists use the total only.
+          A Hall of Famer never grades below {data.model.hofFloor.toFixed(2).replace(/^0/, '')}: induction is the sport’s own judgment of a career, even one cut short by injury.
         </p>
         <p>
           <strong>Grade: career first, expectations second.</strong> The career-quality percentile sets the base on a fixed scale

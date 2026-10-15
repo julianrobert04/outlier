@@ -17,6 +17,7 @@
 
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { gunzipSync } from 'node:zlib'
 
 const BASE = 'https://github.com/nflverse/nflverse-data/releases/download'
 const RAW = 'data/raw'
@@ -74,6 +75,7 @@ function sources() {
     ...range(2001, 2024).map(y => [`depth_charts/depth_charts_${y}.csv`, `depth/${y}.csv`]),
     ...range(2012, LAST_SEASON).map(y => [`snap_counts/snap_counts_${y}.csv`, `snaps/${y}.csv`]),
     ...['def', 'rush', 'rec', 'pass'].map(t => [`pfr_advstats/advstats_season_${t}.csv`, `adv/${t}.csv`]),
+    ['contracts/historical_contracts.csv.gz', 'contracts.csv.gz'],
   ]
 }
 
@@ -90,7 +92,7 @@ async function download() {
       const res = await fetch(`${BASE}/${s[0]}`)
       if (res.status === 404) continue // a season not published yet
       if (!res.ok) throw new Error(`${s[0]}: HTTP ${res.status}`)
-      await writeFile(`${RAW}/${s[1]}`, await res.text())
+      await writeFile(`${RAW}/${s[1]}`, s[1].endsWith('.gz') ? Buffer.from(await res.arrayBuffer()) : await res.text())
     }
   }))
 }
@@ -465,6 +467,8 @@ function careerQuality(players) {
     p.peakVal = ((best[0] ?? 0) + (best[1] ?? 0) + (best[2] ?? 0)) / 3
     p.eliteVal = 3 * p.top10 + p.top20
     p.totalVal = Math.max(p.av, 0) + (p.honorPoints ?? 0)
+    // Seasons as a primary starter: PFR's count (all eras) or our season rows, whichever knows more.
+    p.starterSeasons = Math.max(p.starts || 0, p.rows.filter(s => s.gs >= 8).length)
   }
   // Percentiles within position, among players who played (completed or long careers).
   const sortedBy = (list, f) => list.map(f).sort((a, b) => a - b)
@@ -472,6 +476,27 @@ function careerQuality(players) {
   for (const p of players) if (!p.young && p.games > 0) byGrp.set(p.grp, [...(byGrp.get(p.grp) ?? []), p])
   for (const [g, pool] of byGrp) {
     const tot = sortedBy(pool, p => p.totalVal)
+    if (g === 'OL') {
+      // Linemen: starter longevity (30%), the market's verdict — best second
+      // contract as a share of the cap, compared within the same line spot,
+      // since centers are paid less than tackles (20%) — and total career value
+      // plus honors, where All-Pro teams judge linemen best (50%). Without a
+      // known contract history the market part is left out, not scored zero.
+      const slot = p => (/^(T|OT|LT|RT)$/.test(p.pos) ? 'T' : /^(G|OG|LG|RG)$/.test(p.pos) ? 'G' : p.pos === 'C' ? 'C' : 'OL')
+      const starters = sortedBy(pool, p => p.starterSeasons)
+      const caps = new Map()
+      for (const p of pool) if (p.contractKnown) caps.set(slot(p), [...(caps.get(slot(p)) ?? []), p.bestCap ?? 0])
+      for (const v of caps.values()) v.sort((a, b) => a - b)
+      const mix = p => {
+        const a = midRankSorted(starters, p.starterSeasons), t = midRankSorted(tot, p.totalVal)
+        return p.contractKnown && caps.get(slot(p))
+          ? 0.30 * a + 0.20 * midRankSorted(caps.get(slot(p)), p.bestCap ?? 0) + 0.50 * t
+          : 0.35 * a + 0.65 * t
+      }
+      const mixed = sortedBy(pool, mix)
+      for (const p of players) if (p.grp === g) p.q = p.games > 0 ? midRankSorted(mixed, mix(p)) : 0
+      continue
+    }
     if (!SEASON_PRODUCTION[g]) {
       for (const p of players) if (p.grp === g) p.q = p.games > 0 ? midRankSorted(tot, p.totalVal) : 0
       continue
@@ -501,6 +526,7 @@ function midRankSorted(sorted, x) {
 //      who barely played loses little).
 const CAREER_ANCHORS = [[0, 0.25], [0.3, 0.30], [0.6, 0.40], [0.8, 0.50], [0.9, 0.62], [0.95, 0.74], [0.98, 0.88], [0.995, 0.99], [1, 0.99]]
 const CLIMB_SHARE = 0.15
+const HOF_FLOOR = 0.95
 const BUST_SCALE = 40
 function careerGrade(q) {
   for (let i = 1; i < CAREER_ANCHORS.length; i++) {
@@ -524,6 +550,10 @@ function finalGrade(p) {
   p.climbAdd = Math.round((afterClimb - base) * 1000) / 1000
   p.fallFactor = career < 1 ? Math.round(Math.pow(career, Math.max(p.exp, 1) / BUST_SCALE) * 1000) / 1000 : 1
   let oi = gradeOI(g)
+  p.raw = oi // before the Hall of Fame floor and the in-progress caps
+  // A Hall of Fame career is elite by the sport's own judgment, even when
+  // injuries cut it short (Boselli, Terrell Davis): never below HOF_FLOOR.
+  if (p.hof) oi = Math.max(oi, HOF_FLOOR)
   if (p.active) oi = Math.min(oi, ACTIVE_CAP)
   if (p.young) oi = Math.min(oi, EARLY_CAP)
   return oi
@@ -746,6 +776,41 @@ async function linkHonors(players) {
   return found
 }
 
+// ── Contracts ──────────────────────────────────────────────────────────────
+// OverTheCap contract history (nflverse), linked by OverTheCap id through the
+// player registry. A second contract is any multi-year deal signed after the
+// player's entry year; its average per year as a share of that year's salary
+// cap is the market's verdict on him (comparable across eras). Coverage is
+// thin before ~2008 signings and ends with deals signed in 2022.
+const CONTRACTS_FROM_CLASS = 2005
+async function linkContracts(players, registry) {
+  if (!existsSync(`${RAW}/contracts.csv.gz`)) return 0
+  const rows = parseCSV(gunzipSync(await readFile(`${RAW}/contracts.csv.gz`)).toString('utf8'))
+  const gsisOf = new Map(registry.filter(r => r.otc_id && r.gsis_id).map(r => [r.otc_id, r.gsis_id]))
+  const byGsis = new Map(), byDraft = new Map()
+  for (const c of rows) {
+    const g = gsisOf.get(c.otc_id)
+    if (g) byGsis.set(g, [...(byGsis.get(g) ?? []), c])
+    // Fallback for players the registry hasn't linked: name + draft year + overall pick.
+    if (num(c.draft_overall)) {
+      const k = `${normName(c.player)}|${num(c.draft_year)}|${num(c.draft_overall)}`
+      byDraft.set(k, [...(byDraft.get(k) ?? []), c])
+    }
+  }
+  let linked = 0
+  for (const p of players) {
+    const cs = byGsis.get(p.gsis) ?? (p.pick ? byDraft.get(`${normName(p.name)}|${p.year}|${p.pick}`) : null) ?? []
+    p.contractKnown = cs.length ? 1 : 0
+    const second = cs.filter(c => num(c.year_signed) > p.year && num(c.years) >= 2)
+    const best = second.sort((a, b) => num(b.apy_cap_pct) - num(a.apy_cap_pct))[0]
+    p.secondContract = second.length ? 1 : 0
+    p.bestCap = best ? Math.round(num(best.apy_cap_pct) * 1000) / 1000 : null
+    p.bestDeal = best ? `${best.year_signed}|${num(best.years)}|${Math.round(num(best.apy) / 1e5) / 10}|${best.team}` : ''
+    if (cs.length) linked++
+  }
+  return linked
+}
+
 // ── College stats ──────────────────────────────────────────────────────────
 // Season stats from CollegeFootballData.com (scripts/fetch-college.mjs), linked
 // to players by name, college and years before the NFL. Offense from ~2007,
@@ -920,6 +985,7 @@ async function main() {
   }
   const recruited = await outlierIndex(players)
   const honored = await linkHonors(players)
+  const contracted = await linkContracts(players, registry)
   careerQuality(players)
   for (const p of players) p.oi = finalGrade(p)
   const collegeLinked = await linkCollege(players)
@@ -944,9 +1010,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'preEra', 'oi', 'm1', 'm2', 'mult', 'base', 'climbAdd', 'fallFactor', 'q', 'top10', 'top20', 'bestRank', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+    'preEra', 'oi', 'raw', 'm1', 'm2', 'mult', 'base', 'climbAdd', 'fallFactor', 'q', 'top10', 'top20', 'bestRank', 'starterSeasons', 'secondContract', 'bestCap', 'bestDeal', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
   // Recruiting fields stay null when there is no link: null means "unknown", never 0.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear', 'bestRank'].includes(f) ? v ?? null : v ?? 0)
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear', 'bestRank', 'bestCap'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({
@@ -955,7 +1021,7 @@ async function main() {
     lastSeason: LAST_SEASON,
     model: {
       bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: SCOPE_FROM, recruitingFrom: FIRST_CLASS, historyFrom: HISTORY_FROM, statsFrom: STATS_FROM, lastClass: LAST_CLASS,
-      youngFrom: YOUNG_FROM, careerAnchors: CAREER_ANCHORS, climbShare: CLIMB_SHARE, bustScale: BUST_SCALE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
+      youngFrom: YOUNG_FROM, careerAnchors: CAREER_ANCHORS, climbShare: CLIMB_SHARE, bustScale: BUST_SCALE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, hofFloor: HOF_FLOOR, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,
@@ -969,13 +1035,14 @@ async function main() {
       noTargets: range(2003, 2008),
       advancedFrom: ADV_FROM,
       runStatsFrom: FIRST_CLASS,
+      contractsFromClass: CONTRACTS_FROM_CLASS,
       college: { offenseFrom: 2007, defenseFrom: COLLEGE_DEFENSE_FROM },
     },
     recruitingLinked: recruited,
     fields, rows,
   }))
   const und = players.filter(p => !p.pick).length
-  console.log(`${players.length} players (${und} undrafted, ${recruited} linked to recruiting, ${collegeLinked} to college stats, ${honored} Pro Bowl spots matched) → ${OUT}`)
+  console.log(`${players.length} players (${und} undrafted, ${recruited} linked to recruiting, ${collegeLinked} to college stats, ${honored} Pro Bowl spots matched, ${contracted} with contracts) → ${OUT}`)
   console.log('AV model R²:', Object.entries(models).map(([g, m]) => `${g} ${m.r2}`).join(' · '))
 }
 
