@@ -57,7 +57,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
           <Chips value={minN} onChange={setMinN} label="Min. players" options={[10, 25, 50]} />
         </div>
         <dl className="lab-key">
-          <div><dt>Vs. pick score</dt><dd>Each player gets .01–.99 for how far he went past his draft pick. Matching the usual for the pick is .30; .50 takes about two good extra seasons; a bust is near .01. The school’s number is its players’ average.</dd></div>
+          <div><dt>Vs. pick score</dt><dd>Each player gets .01–.99 for how far his career, judged by his stats, went past what his draft pick usually produces. Matching the usual is .30; a bust is near .01. The school’s number is its players’ average.</dd></div>
           <div><dt>Clearly beat their pick</dt><dd>Share of the school’s players who scored .50 or more. 20% means 1 in 5.</dd></div>
           <div><dt>The line</dt><dd>
             <span className="key-dot" style={{ background: 'var(--over)' }} /> clearly above the average school ·{' '}

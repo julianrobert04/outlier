@@ -374,11 +374,11 @@ const yearsIn = p => Math.max(LAST_SEASON - p.year + SEASON_FRACTION, 0.5)
 // Early-career players are compared on pace (value per season so far)
 // against every 2022+ class, so a QB isn't measured against two others.
 // Everyone else is compared on career value with nearby classes.
-function expectation(p, group) {
+function expectation(p, group, value) {
   const w0 = yearWindow(p.year)
   const windows = p.young ? [Infinity] : [...new Set([w0, w0 === 3 ? 5 : w0])]
   const drafted = p.pick > 0
-  const val = q => (p.young ? q.av / yearsIn(q) : q.av)
+  const val = value ?? (q => (p.young ? q.av / yearsIn(q) : q.av))
   const mine = val(p)
   let out
   for (const bw of drafted ? BANDWIDTHS : [Infinity]) {
@@ -400,7 +400,7 @@ function expectation(p, group) {
       }
       const e = sw ? swa / sw : 0
       out = {
-        exp: p.young ? e * yearsIn(p) : e, // expected value to date
+        exp: p.young && !value ? e * yearsIn(p) : e, // expected value to date
         pct: sw ? Math.round((100 * below) / sw) : 50,
         peers: sw ? Math.round((sw * sw) / sw2) : 0,
         rank: above + 1, of: core + 1,
@@ -609,6 +609,31 @@ function finalGrade(p) {
   if (p.active) oi = Math.min(oi, ACTIVE_CAP)
   if (p.young) oi = Math.min(oi, EARLY_CAP)
   return oi
+}
+// Vs. pick score (.01–.99): how far a career went past its draft pick, in
+// stats. The measure is the career grade from career quality (peak seasons,
+// top-10/20 finishes, total value + honors; starts and contracts for linemen),
+// compared with the average career grade of players at the same position
+// drafted near the same pick (same kernel as expected value). Matching the
+// usual is .30: staying put isn't an achievement. Gains are in grade points,
+// so beating a low bar with a mediocre career can't score high.
+const PICK_ANCHORS = [[-0.25, 0.01], [0, 0.30], [0.05, 0.35], [0.15, 0.50], [0.30, 0.70], [0.45, 0.88], [0.60, 0.99]]
+function pickScore(players, byGroup) {
+  const grade = q => (q.games ? careerGrade(q.q) : CAREER_ANCHORS[0][1])
+  for (const p of players) {
+    const e = expectation(p, byGroup.get(p.grp), grade)
+    p.pexp = e.exp
+    p.pgap = grade(p) - e.exp
+    p.ps = gradeOI(interp(PICK_ANCHORS, p.pgap))
+  }
+}
+function interp(anchors, x) {
+  if (x <= anchors[0][0]) return anchors[0][1]
+  for (let i = 1; i < anchors.length; i++) {
+    const [x1, y1] = anchors[i - 1], [x2, y2] = anchors[i]
+    if (x <= x2) return y1 + ((y2 - y1) * (x - x1)) / (x2 - x1)
+  }
+  return anchors[anchors.length - 1][1]
 }
 // The final grade rounds down, never up to the next step.
 const gradeOI = x => Math.min(0.99, Math.max(0.01, Math.floor(x * 100 + 1e-9) / 100))
@@ -1049,6 +1074,7 @@ async function main() {
   const contracted = await linkContracts(players, registry)
   careerQuality(players, models)
   for (const p of players) p.oi = finalGrade(p)
+  pickScore(players, byGroup)
   const collegeLinked = await linkCollege(players)
   for (const p of players) { p.cpct ??= null; p.cseasons = p.collegeRows?.length ?? 0 }
 
@@ -1071,9 +1097,9 @@ async function main() {
   const fields = ['id', 'name', 'year', 'round', 'pick', 'team', 'pos', 'grp', 'sub', 'college',
     'av', 'est', 'honors', 'exp', 'pct', 'peers', 'loyal', 'pb', 'ap', 'hof', 'starts', 'games', 'gs1',
     'played', 'seasons', 'to', 'active', 'young', 'classRank', 'posRank', 'dna', 'line',
-    'preEra', 'oi', 'raw', 'm1', 'm2', 'mult', 'base', 'climbAdd', 'fallFactor', 'q', 'top10', 'top20', 'bestRank', 'starterSeasons', 'secondContract', 'bestCap', 'bestDeal', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons']
+    'preEra', 'oi', 'raw', 'm1', 'm2', 'mult', 'base', 'climbAdd', 'fallFactor', 'q', 'top10', 'top20', 'bestRank', 'starterSeasons', 'secondContract', 'bestCap', 'bestDeal', 'ap2', 'awards', 'honorPoints', 'rank', 'of', 'from', 'stars', 'rating', 'recRank', 'recPosRank', 'recPos', 'recYear', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'cpct', 'cseasons', 'ps', 'pexp', 'pgap']
   // Recruiting fields stay null when there is no link: null means "unknown", never 0.
-  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : f === 'q' ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear', 'bestRank', 'bestCap'].includes(f) ? v ?? null : v ?? 0)
+  const round = (f, v) => (f === 'exp' ? Math.round(v * 10) / 10 : f === 'loyal' ? Math.round(v * 100) / 100 : ['q', 'pexp', 'pgap'].includes(f) ? Math.round(v * 1000) / 1000 : ['m1', 'm2', 'mult'].includes(f) ? (v == null ? null : Number(v.toPrecision(3))) : ['cpct', 'sDraftRate', 'sMedianPick', 'sValue', 'sExpected', 'recRank', 'recPosRank', 'recYear', 'bestRank', 'bestCap'].includes(f) ? v ?? null : v ?? 0)
   const rows = players.map(p => fields.map(f => round(f, p[f])))
 
   await writeFile(`${OUT}/players.json`, JSON.stringify({
@@ -1082,7 +1108,7 @@ async function main() {
     lastSeason: LAST_SEASON,
     model: {
       bandwidths: BANDWIDTHS, minPeers: MIN_PEERS, firstClass: SCOPE_FROM, recruitingFrom: FIRST_CLASS, historyFrom: HISTORY_FROM, statsFrom: STATS_FROM, lastClass: LAST_CLASS,
-      youngFrom: YOUNG_FROM, careerAnchors: CAREER_ANCHORS, climbShare: CLIMB_SHARE, bustScale: BUST_SCALE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, hofFloor: HOF_FLOOR, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
+      youngFrom: YOUNG_FROM, careerAnchors: CAREER_ANCHORS, climbShare: CLIMB_SHARE, bustScale: BUST_SCALE, earlyCap: EARLY_CAP, activeCap: ACTIVE_CAP, hofFloor: HOF_FLOOR, pickAnchors: PICK_ANCHORS, seasonFraction: SEASON_FRACTION, lastJudgedClass: YOUNG_FROM - 1, shards: SHARDS,
       avModel: Object.fromEntries(Object.entries(models).map(([g, m]) => [g, { r2: m.r2, n: m.n }])),
     },
     seasonCols: SEASON_COLS,

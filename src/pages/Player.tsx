@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   accolades, ALL_ARCHETYPES, dealLabel, honorsList, recruitPosLabel, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
-  pickScore, shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season } from '../data'
+  pickScore, shortPick, yearsIn, type Dataset, type Group, type Player, type Season } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
 import { Equation, StageSentences } from '../Formula'
 
@@ -23,7 +23,6 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
     )
   }
 
-  const g = gap(p)
   const arche = ALL_ARCHETYPES.find(a => a.name === p.dna)
   const span = p.seasons ? `${p.year}–${p.active ? 'now' : p.to}` : 'never played a regular-season game'
   const yrs = yearsIn(p, data)
@@ -99,7 +98,8 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
             <Stat label="Vs. his pick" value={oiLabel(pickScore(p))} tone={pickScore(p) >= 0.7 ? 'over' : pickScore(p) <= 0.1 ? 'under' : undefined} />
           </div>
           <p className="muted" style={{ marginTop: 12, maxWidth: '52ch' }}>
-            {signed(g, 1)} career value vs. the usual. Matching the usual scores .30; only a big gain scores high, so beating a low bar doesn’t make a good grade.
+            Judged by his stats: a career grade of {oiLabel(p.games ? p.base : 0.25)} against {oiLabel(p.pexp)}, the usual for {p.pick ? `pick #${p.pick}` : 'undrafted players'} at {p.grp}{p.young ? ' by now' : ''}.
+            {' '}Matching the usual scores .30; only a much better career scores high, so beating a low bar doesn’t earn a good grade.
           </p>
           <Strip p={p} peers={peers} />
           <p className="mono faint" style={{ fontSize: 12 }}>

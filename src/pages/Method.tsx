@@ -125,6 +125,21 @@ export default function MethodPage({ data }: { data: Dataset }) {
           Bands: .99 legendary, .95+ great, .85+ very good, .70+ solid, .50+ average, .25+ below average, under .25 bust.</p>
       </Block>
 
+      <Block t="Vs. pick score">
+        <p>
+          How far a career went past its draft pick, judged by <strong>stats</strong>, not only career value. We take the player’s career grade,
+          built from how his best seasons ranked at his position, his top-10 and top-20 finishes, and his total value plus honors (starts and second
+          contracts for linemen). Then we compare it with the <strong>average career grade of players at the same position drafted near the same pick</strong>,
+          weighted the same way as expected value.
+        </p>
+        <p>
+          Matching the usual scores <strong>.30</strong>, because staying where you were drafted isn’t an achievement. The score climbs with the grade
+          gained, not with a ratio, so a mediocre career that beat a low bar can’t score high: +.15 grade is .50, +.30 is .70, +.45 is .88, +.60 is .99.
+          Falling short drops fast: .25 below the usual is .01.
+        </p>
+        <PickCheck data={data} />
+      </Block>
+
       <Block t="Career DNA">
         <p>
           Paths are assigned by plain rules, checked in order (see the Career DNA page). “Same path” uses a six-part career fingerprint:
@@ -158,5 +173,36 @@ function Block({ t, children }: { t: string; children: React.ReactNode }) {
       <h2 className="h2">{t}</h2>
       <div className="prose">{children}</div>
     </section>
+  )
+}
+
+// The check: outcomes the score never sees (second contracts, seasons as a
+// starter) should rise with it. Computed live from the data.
+function PickCheck({ data }: { data: Dataset }) {
+  const done = data.players.filter(p => !p.young && !p.active && p.pick)
+  const withDeals = done.filter(p => p.year >= data.coverage.contractsFromClass && p.year <= 2017)
+  const bands: [number, number, string][] = [[0, 0.2, 'under .20'], [0.2, 0.3, '.20–.29'], [0.3, 0.4, '.30–.39'], [0.4, 0.5, '.40–.49'], [0.5, 0.7, '.50–.69'], [0.7, 1, '.70+']]
+  const pct = (xs: typeof done, f: (p: (typeof done)[number]) => boolean) => xs.length ? `${Math.round((100 * xs.filter(f).length) / xs.length)}%` : '—'
+  return (
+    <>
+      <p><strong>Does it hold up?</strong> The score never looks at contracts for skill players or defenders, or at how many seasons a player started. If it measures real careers, both should rise with it. Finished careers of drafted players:</p>
+      <table className="rows" style={{ marginTop: 8 }}>
+        <thead><tr><th>Vs. pick</th><th className="r">Players</th><th className="r">Got a second contract</th><th className="r">Avg. seasons as a starter</th></tr></thead>
+        <tbody>
+          {bands.map(([a, b, l]) => {
+            const g = done.filter(p => p.ps >= a && p.ps < b), c = withDeals.filter(p => p.ps >= a && p.ps < b)
+            return (
+              <tr key={l}>
+                <td className="num">{l}</td>
+                <td className="r num">{g.length.toLocaleString()}</td>
+                <td className="r num">{pct(c, p => !!p.secondContract)}</td>
+                <td className="r num">{g.length ? (g.reduce((s, p) => s + p.starterSeasons, 0) / g.length).toFixed(1) : '—'}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className="faint" style={{ fontSize: 13 }}>Second contracts: classes {data.coverage.contractsFromClass}–2017, whose first deals have ended (OverTheCap via nflverse).</p>
+    </>
   )
 }
