@@ -54,7 +54,7 @@ export default function GapPage({ data }: { data: Dataset }) {
           <thead>
             <tr>
               <th>#</th><th>Player</th><th className="hide-s">Drafted</th>
-              <th className="r hide-s">Expected</th><th className="r hide-s">Actual</th>
+              <th className="r hide-s">Usual</th><th className="r hide-s">His</th>
               <th className="hide-s" style={{ width: '22%' }}>Vs. expectation</th><th className="r">Gap</th><th className="r">OI</th>
             </tr>
           </thead>

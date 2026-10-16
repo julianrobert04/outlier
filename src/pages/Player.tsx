@@ -93,11 +93,11 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
           </div>
         </div>
         <div>
-          <h2 className="h3">Expectation vs. reality{p.young ? ', so far' : ''}</h2>
+          <h2 className="h3">Compared with his draft pick{p.young ? ', so far' : ''}</h2>
           <div style={{ display: 'flex', gap: 40, marginTop: 16, flexWrap: 'wrap' }}>
-            <Stat label={p.young ? 'Expected AV by now' : 'Expected career AV'} value={p.exp.toFixed(1)} />
-            <Stat label={`Actual${p.est ? ' (est.)' : ''} AV`} value={String(p.av)} />
-            <Stat label="Gap" value={signed(g, 1)} tone={isExtreme(p) ? (g >= 0 ? "over" : "under") : undefined} />
+            <Stat label={`Usual for ${p.pick ? `pick #${p.pick}` : 'an undrafted player'}${p.young ? ' by now' : ''}`} value={p.exp.toFixed(1)} />
+            <Stat label={`His career value${p.est ? ' (est.)' : ''}`} value={String(p.av)} />
+            <Stat label="Difference" value={signed(g, 1)} tone={isExtreme(p) ? (g >= 0 ? "over" : "under") : undefined} />
           </div>
           <Strip p={p} peers={peers} />
           <p className="mono faint" style={{ fontSize: 12 }}>
@@ -233,12 +233,12 @@ function verdict(p: Player) {
   const g = p.oi
   if (!p.games) return p.young ? 'Hasn’t played a regular-season game yet.' : `${p.pick ? `Drafted #${p.pick}` : 'Went undrafted'}, never played a regular-season game.`
   const soFar = p.young ? ' so far' : ''
-  if (g >= 0.99) return `One of the biggest climbs of the era: far beyond every expectation${soFar}.`
-  if (g >= 0.9) return `Rose well beyond what was expected${soFar}.`
-  if (g >= 0.65) return `Beat expectations${soFar}.`
-  if (g >= 0.35) return `Roughly what was expected${soFar}.`
-  if (g >= 0.1) return `Fell short of expectations${soFar}.`
-  return `One of the steepest falls from expectation${soFar}.`
+  if (g >= 0.99) return `One of the best careers of the era${soFar}.`
+  if (g >= 0.9) return `A great career, well above where he was picked${soFar}.`
+  if (g >= 0.65) return `A good career, better than where he was picked${soFar}.`
+  if (g >= 0.35) return `An average career for where he was picked${soFar}.`
+  if (g >= 0.1) return `Fell short of where he was picked${soFar}.`
+  return `One of the biggest busts for where he was picked${soFar}.`
 }
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: 'over' | 'under' }) {
@@ -392,7 +392,7 @@ function Strip({ p, peers }: { p: Player; peers: { p: Player; v: number }[] }) {
   return (
     <div style={{ position: 'relative', height: 96, margin: '32px 0 16px' }}>
       <p className="sr-only">
-        {p.name} has {p.av} career AV against {p.exp.toFixed(1)} expected, more than {p.pct}% of {peers.length} comparable players.
+        {p.name} has {p.av} career AV; the usual for his pick is {p.exp.toFixed(1)}. He outplayed {p.pct}% of {peers.length} comparable players.
       </p>
       <div style={{ position: 'absolute', left: 0, right: 0, top: 48, borderTop: '1px solid var(--rule)' }} aria-hidden="true" />
       {peers.slice(0, 400).map(({ p: q, v }, i) => (
@@ -405,7 +405,7 @@ function Strip({ p, peers }: { p: Player; peers: { p: Player; v: number }[] }) {
           }} />
       ))}
       <div style={{ position: 'absolute', left: X(p.exp), top: 14, bottom: 14, borderLeft: '2px dashed var(--ink-2)' }} />
-      <div className="mono faint" style={{ position: 'absolute', left: X(p.exp), top: -6, fontSize: 12, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>expected</div>
+      <div className="mono faint" style={{ position: 'absolute', left: X(p.exp), top: -6, fontSize: 12, transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>usual for the pick</div>
       <div style={{
         position: 'absolute', left: X(p.av), top: 48, width: 18, height: 18, marginLeft: -9, marginTop: -9, borderRadius: '50%',
         background: gap(p) >= 0 ? 'var(--over)' : 'var(--under)', boxShadow: '0 0 0 3px var(--paper)',

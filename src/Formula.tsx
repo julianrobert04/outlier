@@ -53,10 +53,10 @@ export function StageSentences({ p, data }: { p: Player; data: Dataset }) {
         <span className="stage-label">3 · Against his slot{p.young ? ' so far' : ''}</span>
         <span className={`stage-value num ${fell ? 'under' : ''}`}>{times(p.m2)}</span>
         <span className="stage-text">
-          {p.av} career value against {p.exp.toFixed(0)} expected {p.pick ? `from pick #${p.pick}` : 'for an undrafted player'} at {p.grp}.
+          {p.av} career value; players picked {p.pick ? `around #${p.pick}` : 'undrafted'} at {p.grp} usually reach {p.exp.toFixed(0)}.
           {fell
             ? ` Falling short costs more the higher the expectation: ×${p.fallFactor.toFixed(2)} on the grade.`
-            : p.climbAdd > 0.004 ? ` Beating expectations adds +${p.climbAdd.toFixed(2)}.` : ''}
+            : p.climbAdd > 0.004 ? ` Beating the usual adds +${p.climbAdd.toFixed(2)}.` : ''}
         </span>
       </li>
     </ol>

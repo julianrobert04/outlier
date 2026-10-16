@@ -156,7 +156,7 @@ function Extreme({ p, kind }: { p: Player; kind: 'over' | 'under' }) {
       </div>
       <div className="h3" style={{ marginTop: 16 }}>{p.name}</div>
       <div className="meta">
-        {p.pos} · {p.pick ? `${p.year} · ${shortPick(p)}` : `undrafted, ${p.year}`} · {p.av}{p.est ? '*' : ''} AV vs {p.exp.toFixed(0)} expected
+        {p.pos} · {p.pick ? `${p.year} · ${shortPick(p)}` : `undrafted, ${p.year}`} · {p.av}{p.est ? '*' : ''} AV · usual {p.exp.toFixed(0)}
       </div>
       <div className="oi-rank">{rankLabel(p)} comparable {p.pick ? 'picks' : 'undrafted players'}</div>
     </a>

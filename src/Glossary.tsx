@@ -7,8 +7,8 @@ export default function Glossary({ data, exampleId }: { data: Dataset; exampleId
   const terms: [string, string][] = [
     ['Outlier Index', 'The grade, from .01 to .99. How good the career was, lifted for beating expectations and lowered for falling short of them. .99 is Hall-of-Fame level.'],
     ['Career value (AV)', 'Pro Football Reference’s Approximate Value: one number for a whole career, built from the player’s stats and role, so a guard and a quarterback can be compared. A strong starter season is about 8–12.'],
-    ['Expected career value', 'The average career value of players at the same position, drafted near the same pick, in nearby draft years. A #1 pick is expected to reach about 63; pick #100 about 15; an undrafted player about 4.'],
-    ['Gap', 'Actual career value minus expected. +90 means 90 points more than his draft slot usually produces.'],
+    ['Usual for the pick', 'The average career value of players at the same position, drafted near the same pick, in nearby draft years. A #1 pick usually reaches about 63; pick #100 about 15; an undrafted player about 4.'],
+    ['Difference', 'His career value minus the usual for his pick. +90 means 90 points more than his draft slot usually produces.'],
     ['Stars · 247 Composite', 'The high-school recruiting rating (0–5★), averaged across the major recruiting services by 247Sports. Available from the 2000 recruiting class.'],
     ['Draft multiplier', 'Draft value of the pick ÷ what recruits with the same stars usually get. ×12 means he went far higher than his rating predicted.'],
     ['Career multiplier', 'Career value ÷ what his draft slot usually produces. Below ×1 is a career that fell short: the higher the pick, the harder the grade drops.'],
@@ -25,7 +25,7 @@ export default function Glossary({ data, exampleId }: { data: Dataset; exampleId
   const key: [string, string][] = [
     ['Outlier Index', 'The grade, .01 to .99. .99 is Hall-of-Fame level.'],
     ['Career value', 'One number for a whole career, built from stats. A starter season ≈ 8–12.'],
-    ['Expected', 'What players taken at that pick usually produce.'],
+    ['Usual for the pick', 'The career value players taken at that pick usually reach.'],
     ['Stars', 'High-school recruiting rating, 0–5★.'],
     ['UDFA', 'Undrafted.'],
   ]
@@ -34,7 +34,7 @@ export default function Glossary({ data, exampleId }: { data: Dataset; exampleId
       <h2 id="how-to-read" className="h3">How to read Outlier</h2>
       {p && p.m1 != null && (
         <p className="example-line">
-          <a href={playerHref(p)}><strong>{p.name}</strong></a>: {p.stars}★ recruit → pick #{p.pick} → {p.av} career value vs {p.exp.toFixed(0)} expected →{' '}
+          <a href={playerHref(p)}><strong>{p.name}</strong></a>: {p.stars}★ recruit → pick #{p.pick} → {p.av} career value (usual for that pick: {p.exp.toFixed(0)}) →{' '}
           <strong className={p.oi >= 0.95 ? 'over' : ''}>{oiLabel(p.oi)} {gradeWord(p.oi)}</strong>
         </p>
       )}
@@ -53,7 +53,7 @@ export default function Glossary({ data, exampleId }: { data: Dataset; exampleId
         </dl>
       </details>
       <p className="meta" style={{ marginTop: 10 }}>
-        .99 legendary · .95 great · .85 very good · .70 solid · .50 as expected · under .25 bust ·{' '}
+        .99 legendary · .95 great · .85 very good · .70 solid · .50 average · under .25 bust ·{' '}
         <a href="#/method" style={{ textDecoration: 'underline' }}>How it works →</a>
       </p>
     </section>

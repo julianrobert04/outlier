@@ -97,7 +97,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
           <h2 className="h1">{college}</h2>
           <p className="muted" style={{ marginTop: 8 }}>{focus.length} players drafted since {since}. Every one of them counts toward the number above.</p>
           <table className="rows" style={{ marginTop: 24 }}>
-            <thead><tr><th>Player</th><th className="hide-s">Drafted</th><th className="r hide-s">Expected</th><th className="r hide-s">Actual</th><th className="r">Gap</th><th className="r">OI</th></tr></thead>
+            <thead><tr><th>Player</th><th className="hide-s">Drafted</th><th className="r hide-s">Usual</th><th className="r hide-s">His</th><th className="r">Diff.</th><th className="r">OI</th></tr></thead>
             <tbody>
               {focus.map(p => (
                 <tr key={p.id} className="link" onClick={() => (location.hash = playerHref(p).slice(1))}>

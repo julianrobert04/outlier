@@ -75,7 +75,7 @@ export default function MethodPage({ data }: { data: Dataset }) {
           length. Classes after {data.model.lastJudgedClass} use the early-career track above. If a comparison group is smaller than
           {' '}{data.model.minPeers} effective players, the window widens. Players whose group stays thin are flagged on their page.
         </p>
-        <p><strong>Gap</strong> = actual AV − expected AV. <strong>Percentile</strong> = the weighted share of comparable picks this player outplayed.</p>
+        <p><strong>Difference</strong> = his AV − the usual AV for his pick. <strong>Percentile</strong> = the weighted share of comparable picks this player outplayed.</p>
       </Block>
 
       <Block t="Outlier Index">
@@ -122,7 +122,7 @@ export default function MethodPage({ data }: { data: Dataset }) {
           up to {Math.round(data.model.climbShare * 100)}% of the way to .99, scaled by career quality, so a climb only counts as much as the career was good. A career below its draft slot multiplies it by
           career multiplier<sup>expected value ÷ {data.model.bustScale}</sup>, so a #1 pick who flames out falls to .01 while a late pick who barely
           played loses little. Careers in progress are capped at {data.model.activeCap.toFixed(2).replace(/^0/, '')} because they can still go down.
-          Bands: .99 legendary, .95+ great, .85+ very good, .70+ solid, .50+ as expected, .25+ below expectations, under .25 bust.</p>
+          Bands: .99 legendary, .95+ great, .85+ very good, .70+ solid, .50+ average, .25+ below average, under .25 bust.</p>
       </Block>
 
       <Block t="Career DNA">

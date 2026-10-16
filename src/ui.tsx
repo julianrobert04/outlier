@@ -62,7 +62,7 @@ export function Chips<T extends string | number>({ value, options, onChange, lab
 export function GapBar({ value, max }: { value: number; max: number }) {
   const w = Math.min(Math.abs(value) / max, 1) * 50
   return (
-    <div className="bar" aria-label={`${signed(value, 1)} AV vs expected`}>
+    <div className="bar" aria-label={`${signed(value, 1)} AV vs the usual for his pick`}>
       <i className={value >= 0 ? 'pos' : 'neg'} style={{ width: `${w}%` }} />
     </div>
   )
@@ -108,7 +108,7 @@ export function PlayerTip({ p }: { p: Player }) {
     <>
       <b>{p.name}</b>
       <div className="mono">{p.pos} · {p.year} · Rd {p.round} #{p.pick} · {p.college}</div>
-      <div className="mono">AV {p.av} vs {p.exp.toFixed(1)} expected · OI {oiLabel(p.oi)}</div>
+      <div className="mono">AV {p.av} · usual for pick {p.exp.toFixed(1)} · OI {oiLabel(p.oi)}</div>
     </>
   )
 }

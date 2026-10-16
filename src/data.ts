@@ -163,7 +163,7 @@ export const rankGroup = (p: { grp: Group; sub?: string }) =>
 // What a grade means, in words.
 export const GRADE_BANDS: [number, string][] = [
   [0.99, 'Legendary'], [0.95, 'Great'], [0.85, 'Very good'], [0.7, 'Solid'],
-  [0.5, 'As expected'], [0.25, 'Below expectations'], [0, 'Bust'],
+  [0.5, 'Average'], [0.25, 'Below average'], [0, 'Bust'],
 ]
 export const gradeWord = (x: number) => GRADE_BANDS.find(([t]) => x >= t)![1]
 
