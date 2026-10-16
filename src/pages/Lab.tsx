@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from 'react'
-import { gap, GROUPS, signed, type Dataset, type Group, type Player } from '../data'
+import { gap, GROUPS, oiLabel, pickScore, signed, type Dataset, type Group, type Player } from '../data'
 import { Chips, currentQuery, GapNum, OI, playerHref, useQueryState, useTip } from '../ui'
 
-const SHRINK = 15 // pseudo-players at zero gap: small samples are pulled toward average
+const SHRINK = 15 // pseudo-players at the overall average: small samples are pulled toward it
 
 export default function LabPage({ data, college }: { data: Dataset; college?: string }) {
   const [grp, setGrp] = useQueryState<Group | 'ALL'>('grp', 'ALL')
@@ -17,33 +17,37 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
       if (p.young || !p.college || p.year < since || (grp !== 'ALL' && p.grp !== grp)) continue
       by.set(p.college, [...(by.get(p.college) ?? []), p])
     }
+    const pool = [...by.values()].flat()
+    const avg = pool.reduce((s, p) => s + pickScore(p), 0) / Math.max(pool.length, 1)
     return [...by.entries()]
       .filter(([, ps]) => ps.length >= minN)
       .map(([name, ps]) => {
-        const g = ps.map(gap)
+        // Each player's vs. pick score, centered on the overall average.
+        const g = ps.map(p => pickScore(p) - avg)
         // Name the player carrying the score when one career is most of it.
         const top = ps.reduce((a, b) => (gap(b) > gap(a) ? b : a))
         const total = g.reduce((s, x) => s + x, 0)
-        const driver = total > 0 && gap(top) > total * 0.5 ? `${top.name} (${signed(gap(top), 0)})` : ''
+        // One player lifts the school's average by .02 or more on his own.
+        const driver = total > 0 && (pickScore(top) - avg) / ps.length >= 0.02 && pickScore(top) - avg > total * 0.5 ? `${top.name} (${oiLabel(pickScore(top))})` : ''
         const n = g.length
         const mean = g.reduce((s, x) => s + x, 0) / n
         const sd = Math.sqrt(g.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(n - 1, 1))
         const se = sd / Math.sqrt(n)
-        return { name, driver, n, mean, lo: mean - 1.96 * se, hi: mean + 1.96 * se, score: (mean * n) / (n + SHRINK), beat: g.filter(x => x > 0).length / n }
+        return { name, driver, n, mean, lo: mean - 1.96 * se, hi: mean + 1.96 * se, avg: avg + mean, score: (mean * n) / (n + SHRINK), beat: ps.filter(p => pickScore(p) >= 0.5).length / n }
       })
       .sort((a, b) => b.score - a.score)
   }, [data, grp, since, minN])
 
-  const scale = Math.max(...rows.map(r => Math.max(Math.abs(r.lo), Math.abs(r.hi))), 1)
+  const scale = Math.max(...rows.map(r => Math.max(Math.abs(r.lo), Math.abs(r.hi))), 0.01)
   const X = (v: number) => `${50 + (v / scale) * 50}%`
-  const focus = college ? data.players.filter(p => !p.young && p.college === college && p.year >= since && (grp === 'ALL' || p.grp === grp)).sort((a, b) => gap(b) - gap(a)) : []
+  const focus = college ? data.players.filter(p => !p.young && p.college === college && p.year >= since && (grp === 'ALL' || p.grp === grp)).sort((a, b) => pickScore(b) - pickScore(a) || gap(b) - gap(a)) : []
 
   return (
     <div className="wrap" style={{ paddingTop: 56 }}>
       <h1 className="h1">Whose players<br />beat their pick?</h1>
       <p className="lede" style={{ marginTop: 20 }}>
         Big schools send the most players to the NFL because they recruit the best players. So we ask a fairer question:
-        do a school’s players end up better or worse than where they were drafted?
+        do a school’s players go well past where they were drafted? Only real gains count: a player who just matched a low pick doesn’t lift his school.
       </p>
 
       <div className="section" style={{ marginTop: 48 }}>
@@ -53,17 +57,17 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
           <Chips value={minN} onChange={setMinN} label="Min. players" options={[10, 25, 50]} />
         </div>
         <dl className="lab-key">
-          <div><dt>Beat their pick</dt><dd>Share of the school’s players who did better in the NFL than their draft pick predicted. 60% means 6 out of 10.</dd></div>
-          <div><dt>Avg. vs. pick</dt><dd>On average, how much better (+) or worse (−) they did than their pick predicted, in career value. +8 is about one good season.</dd></div>
+          <div><dt>Vs. pick score</dt><dd>Each player gets .01–.99 for how far he went past his draft pick. Matching the usual for the pick is .30; .50 takes about two good extra seasons; a bust is near .01. The school’s number is its players’ average.</dd></div>
+          <div><dt>Clearly beat their pick</dt><dd>Share of the school’s players who scored .50 or more. 20% means 1 in 5.</dd></div>
           <div><dt>The line</dt><dd>
-            <span className="key-dot" style={{ background: 'var(--over)' }} /> clearly better than expected ·{' '}
+            <span className="key-dot" style={{ background: 'var(--over)' }} /> clearly above the average school ·{' '}
             <span className="key-dot" style={{ background: 'var(--under)' }} /> clearly worse ·{' '}
             <span className="key-dot" style={{ background: 'var(--ink-2)' }} /> about average, or not enough data. A longer line means less certain.
           </dd></div>
         </dl>
 
         <table className="rows">
-          <thead><tr><th>#</th><th>College</th><th className="r">Players</th><th className="r hide-s">Beat their pick</th><th style={{ width: '38%' }} className="hide-s">Better or worse than their pick</th><th className="r">Avg. vs. pick</th></tr></thead>
+          <thead><tr><th>#</th><th>College</th><th className="r">Players</th><th className="r hide-s">Clearly beat their pick</th><th style={{ width: '38%' }} className="hide-s">Better or worse than their pick</th><th className="r">Vs. pick score</th></tr></thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.name} className="link" onClick={() => (location.hash = `/lab/${encodeURIComponent(r.name)}${currentQuery()}`)}
@@ -73,7 +77,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
                 <td className="r num">{r.n}</td>
                 <td className="r num hide-s">{Math.round(r.beat * 100)}%</td>
                 <td className="hide-s"
-                  onMouseMove={e => setTip({ x: e.clientX, y: e.clientY, body: <><b>{r.name}</b><span className="mono">avg {signed(r.mean, 1)} AV · CI {signed(r.lo, 1)} to {signed(r.hi, 1)}</span></> })}
+                  onMouseMove={e => setTip({ x: e.clientX, y: e.clientY, body: <><b>{r.name}</b><span className="mono">avg {oiLabel(r.avg)} · {signed(r.mean * 100, 0)} vs. the average school (pts)</span></> })}
                   onMouseLeave={() => setTip(null)}>
                   <div style={{ position: 'relative', height: 18 }}>
                     <div style={{ position: 'absolute', left: '50%', top: -6, bottom: -6, borderLeft: '1px solid var(--ink-3)' }} />
@@ -84,7 +88,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
                     }} />
                   </div>
                 </td>
-                <td className="r num"><span className={r.mean >= 0 ? 'over' : 'under'}>{signed(r.mean, 1)[0]}</span>{signed(r.mean, 1).slice(1)}</td>
+                <td className={`r num ${r.lo > 0 ? 'over' : r.hi < 0 ? 'under' : ''}`}>{oiLabel(r.avg)}</td>
               </tr>
             ))}
           </tbody>
@@ -97,7 +101,7 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
           <h2 className="h1">{college}</h2>
           <p className="muted" style={{ marginTop: 8 }}>{focus.length} players drafted since {since}. Every one of them counts toward the number above.</p>
           <table className="rows" style={{ marginTop: 24 }}>
-            <thead><tr><th>Player</th><th className="hide-s">Drafted</th><th className="r hide-s">Usual</th><th className="r hide-s">His</th><th className="r">Diff.</th><th className="r">OI</th></tr></thead>
+            <thead><tr><th>Player</th><th className="hide-s">Drafted</th><th className="r hide-s">Usual</th><th className="r hide-s">His</th><th className="r hide-s">Diff.</th><th className="r">Vs. pick</th><th className="r">OI</th></tr></thead>
             <tbody>
               {focus.map(p => (
                 <tr key={p.id} className="link" onClick={() => (location.hash = playerHref(p).slice(1))}>
@@ -105,7 +109,8 @@ export default function LabPage({ data, college }: { data: Dataset; college?: st
                   <td className="mono hide-s">{p.year} · {p.pick ? `#${p.pick}` : 'UDFA'}</td>
                   <td className="r num hide-s faint">{p.exp.toFixed(1)}</td>
                   <td className="r num hide-s">{p.av}{p.est ? '*' : ''}</td>
-                  <td className="r"><GapNum p={p} /></td>
+                  <td className="r hide-s"><GapNum p={p} /></td>
+                  <td className="r num">{oiLabel(pickScore(p))}</td>
                   <td className="r"><OI value={p.oi} /></td>
                 </tr>
               ))}

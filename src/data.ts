@@ -107,6 +107,24 @@ export function loadData(): Promise<Dataset> {
 }
 
 export const gap = (p: Player) => p.av - p.exp
+
+// Vs. pick score, .01–.99: how far a career went past its draft pick.
+// Matching the usual for the pick is .30 (low: staying put isn't an achievement).
+// Above it, the score climbs with the career value gained, not the ratio, so a
+// mediocre player who beat a tiny bar can't score high. Below it, the score
+// falls with the share of the usual reached: ending at a sixth of it is ~.01.
+export const PICK_ANCHORS: [number, number][] = [[0, 0.3], [5, 0.35], [15, 0.5], [30, 0.7], [50, 0.88], [80, 0.99]]
+export function pickScore(p: Player) {
+  const g = p.av - p.exp
+  let s: number
+  if (g <= 0) s = 0.3 * Math.pow(Math.max(p.av, 0) / Math.max(p.exp, 0.1), 1.5)
+  else {
+    const i = PICK_ANCHORS.findIndex(([x]) => x >= g)
+    if (i < 0) s = 0.99
+    else { const [x0, y0] = PICK_ANCHORS[i - 1], [x1, y1] = PICK_ANCHORS[i]; s = y0 + (y1 - y0) * (g - x0) / (x1 - x0) }
+  }
+  return Math.min(0.99, Math.max(0.01, Math.floor(s * 100) / 100))
+}
 export const lowConfidence = (p: Player, d: Dataset) => p.peers < d.model.minPeers
 
 export const signed = (n: number, digits = 0) =>

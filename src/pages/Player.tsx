@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   accolades, ALL_ARCHETYPES, dealLabel, honorsList, recruitPosLabel, gap, gradeWord, isExtreme, loadCollege, rankLabel, GROUP_NAME, loadSeasons, lowConfidence, oiLabel, ordinal, peersOf, samePath,
-  shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season,
-} from '../data'
+  pickScore, shortPick, signed, yearsIn, type Dataset, type Group, type Player, type Season } from '../data'
 import { Chips, GapNum, OI, playerHref, useTip } from '../ui'
 import { Equation, StageSentences } from '../Formula'
 
@@ -97,8 +96,11 @@ export default function PlayerPage({ data, id }: { data: Dataset; id: string }) 
           <div style={{ display: 'flex', gap: 40, marginTop: 16, flexWrap: 'wrap' }}>
             <Stat label={`Usual for ${p.pick ? `pick #${p.pick}` : 'an undrafted player'}${p.young ? ' by now' : ''}`} value={p.exp.toFixed(1)} />
             <Stat label={`His career value${p.est ? ' (est.)' : ''}`} value={String(p.av)} />
-            <Stat label="Difference" value={signed(g, 1)} tone={isExtreme(p) ? (g >= 0 ? "over" : "under") : undefined} />
+            <Stat label="Vs. his pick" value={oiLabel(pickScore(p))} tone={pickScore(p) >= 0.7 ? 'over' : pickScore(p) <= 0.1 ? 'under' : undefined} />
           </div>
+          <p className="muted" style={{ marginTop: 12, maxWidth: '52ch' }}>
+            {signed(g, 1)} career value vs. the usual. Matching the usual scores .30; only a big gain scores high, so beating a low bar doesn’t make a good grade.
+          </p>
           <Strip p={p} peers={peers} />
           <p className="mono faint" style={{ fontSize: 12 }}>
             Dots: {peers.length} {comparedTo}{p.young ? ', scaled to the same time in the league' : ''}.
